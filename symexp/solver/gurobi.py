@@ -1,19 +1,20 @@
 from typing import Any, cast
+import multiprocessing
 
 import gurobipy as gp
 from gurobipy import GRB  # type: ignore
 
 from ..expr import Model, Sense, Solution, VType, QuadExpr, LinExpr
 from ._base import Solver, _Var, _Expr, _ExprT_con
-from typing import Union
 
 _VTYPE = {VType.BINARY: GRB.BINARY, VType.INTEGER: GRB.INTEGER, VType.CONTINUOUS: GRB.CONTINUOUS}
 _SENSE = {Sense.MAXIMIZE: GRB.MAXIMIZE, Sense.MINIMIZE: GRB.MINIMIZE}
 
 
 class GurobiSolver(Solver[_ExprT_con]):
-    def __init__(self, model: Model[_ExprT_con], **kwargs):
+    def __init__(self, model: Model[_ExprT_con], num_threads: int = multiprocessing.cpu_count(), **kwargs):
         self.model = gp.Model(model.name(), **kwargs)  # type: ignore
+        self.model.Params.Threads = num_threads
         super().__init__(model)
         self.model.update()
         self._vars = self.model.getVars()
