@@ -165,7 +165,7 @@ class QuadExpr(Expr):
             res += float(v1) * float(v2) * coeff
         for v, coeff in self.lin_expr().items():
             res += float(v) * coeff
-        return res
+        return float(res)
 
     def _signature(self) -> _Signature:
         quad_vars = sorted(self.quad_expr().items(), key=lambda kv: (kv[0][0].index(), kv[0][1].index()))
@@ -399,7 +399,7 @@ class Var(LinExpr):
     def __float__(self) -> float:
         value = self.value()
         assert value is not None, "No solution has been set"
-        return value
+        return float(value)
 
     # -------
     # IQuadExpr
@@ -797,6 +797,10 @@ class Model(ABC, Generic[_ExprT]):
     # Getters
 
     @abstractmethod
+    def name(self) -> str:
+        ...
+
+    @abstractmethod
     def get_vars(self) -> list[Var]:
         ...
 
@@ -805,11 +809,7 @@ class Model(ABC, Generic[_ExprT]):
         ...
 
     @abstractmethod
-    def get_objective(self) -> _ExprT:
-        ...
-
-    @abstractmethod
-    def get_objective_sense(self) -> Sense:
+    def get_objective(self) -> tuple[_ExprT, Sense]:
         ...
 
     # ----------------
@@ -1094,7 +1094,7 @@ class _Model(Model):
                 all_res = all_res and res
                 if verbose:
                     print(f"[{'OK' if res else 'FAILED'}]: {constr}")
-            except RuntimeError as e:
+            except AssertionError as e:
                 if verbose:
                     print(f"[SKIPPED]: {constr}")
         return all_res
@@ -1109,19 +1109,18 @@ class _Model(Model):
     # ----------------
     # Getters
 
+    def name(self) -> str:
+        return self._name
+
     def get_vars(self) -> list[Var]:
         return [*self._vars]
 
     def get_constraint(self) -> list[Constr]:
         return [*self._constrs]
 
-    def get_objective(self) -> QuadExpr:
+    def get_objective(self) -> tuple[QuadExpr, Sense]:
         assert self._obj is not None and self._obj_sense is not None, "No objective set"
-        return check_type(self._obj, QuadExpr)
-
-    def get_objective_sense(self) -> Sense:
-        assert self._obj is not None and self._obj_sense is not None, "No objective set"
-        return self._obj_sense
+        return check_type(self._obj, QuadExpr), self._obj_sense
 
     # ----------------
     # Syntactic Sugar
@@ -1447,7 +1446,7 @@ class Bound(NamedTuple):
     max: Number
 
     def __add__(self, other: Union["Bound", Number]) -> "Bound":
-        if isinstance(other, "Bound"):
+        if isinstance(other, Bound):
             return Bound(self.min + other.min, self.max + other.max)
         else:
             return Bound(self.min + other, self.max + other)
