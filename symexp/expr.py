@@ -70,6 +70,9 @@ class Expr(ABC):
     def __float__(self) -> float:
         ...
 
+    def __int__(self) -> int:
+        return int(self.__float__())
+
     @abstractmethod
     def _signature(self) -> _Signature:
         ...
