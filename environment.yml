@@ -1,0 +1,9 @@
+name: symexp
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+  - pip>=20.3
+  - pip:
+    - typeguard
+    - -e .
