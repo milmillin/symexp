@@ -2,14 +2,15 @@ from ast import Assert
 import pytest
 
 from symexp import Model, VType, Var, BinVar, LinExpr, Constr
+from symexp.expr import QuadExpr
 
 
 class TestModel:
     def test_init(self):
-        m = Model("test")
+        m = Model.create("test")
 
     def test_add_var_1(self):
-        m = Model("test")
+        m = Model.create("test")
 
         t1 = m.add_var(VType.BINARY)
         assert isinstance(t1, BinVar)
@@ -25,7 +26,7 @@ class TestModel:
         assert t3.bound().min == 0
 
     def test_add_var_2(self):
-        m = Model("test")
+        m = Model.create("test")
 
         t1 = m.add_var(VType.INTEGER, 1, 0)
         assert isinstance(t1, BinVar)
@@ -37,14 +38,14 @@ class TestModel:
         assert isinstance(t3, BinVar)
 
     def test_add_var_3(self):
-        m = Model("test")
+        m = Model.create("test")
 
         t1 = m.add_var(VType.INTEGER, 5, -5)
         assert isinstance(t1, Var)
         assert t1.bound().min == -5 and t1.bound().max == 5
 
     def test_add_var_4(self):
-        m = Model("test")
+        m = Model.create("test")
 
         t1 = m.add_var()
         assert isinstance(t1, Var)
@@ -62,7 +63,7 @@ class TestModel:
             t4 = m.add_var(ub=5, lb=10)
 
     def test_add_vars(self):
-        m = Model("test")
+        m = Model.create("test")
 
         t1 = m.add_vars(10)
         assert len(t1) == 10
@@ -70,23 +71,28 @@ class TestModel:
         assert all(t.name() == f"T0[{i}]" for i, t in enumerate(t1))
 
     def test_add_var_duplicate(self):
-        m = Model("test")
+        m = Model.create("test")
         a = m.add_var(name="A")
         with pytest.raises(AssertionError):
             b = m.add_var(name="A")
     
     def test_add_constraints(self):
-        m = Model[LinExpr]("test")
+        m = Model.create("test", LinExpr)
         a = m.add_var(name="A")
         b = m.add_var(name="B")
 
-        m.add_constraint(a <= b)
+        m.add_constraint(a <= 5)
+        m.add_constraint(5 <= a)
+        m.add_constraint(a <= b + b)
+
+        with pytest.raises(AssertionError):
+            m.add_constraint(a <= b * b)  # type: ignore
 
 
 
 class TestVar:
     def test_var_neg(self):
-        m = Model("test")
+        m = Model.create("test")
         t = m.add_var()
 
         expr = -t
@@ -95,7 +101,7 @@ class TestVar:
 
     @pytest.mark.parametrize("coeff", (-1, 0, 1, 1.5))
     def test_var_num_add(self, coeff: float):
-        m = Model("test")
+        m = Model.create("test")
         t = m.add_var()
 
         expr = t + coeff
@@ -108,7 +114,7 @@ class TestVar:
 
     @pytest.mark.parametrize("coeff", (-1, 0, 1, 1.5))
     def test_var_num_sub(self, coeff: float):
-        m = Model("test")
+        m = Model.create("test")
         t = m.add_var()
 
         expr = t - coeff
@@ -121,7 +127,7 @@ class TestVar:
 
     @pytest.mark.parametrize("coeff", (-1, 1, 1.5))
     def test_var_num_mul_nonzero(self, coeff: float):
-        m = Model("test")
+        m = Model.create("test")
         t = m.add_var()
 
         expr = t * coeff
@@ -133,7 +139,7 @@ class TestVar:
         assert expr._signature() == ((), ((0, coeff),), 0)
 
     def test_var_num_mul_zero(self):
-        m = Model("test")
+        m = Model.create("test")
         t = m.add_var()
 
         expr = t * 0
@@ -142,7 +148,7 @@ class TestVar:
 
     @pytest.mark.parametrize("coeff", (-1, 1, 1.5))
     def test_var_num_div_nonzero(self, coeff: float):
-        m = Model("test")
+        m = Model.create("test")
         t = m.add_var()
 
         expr = t / coeff
@@ -150,14 +156,14 @@ class TestVar:
         assert expr._signature() == ((), ((0, 1 / coeff),), 0)
 
     def test_var_num_div_zero(self):
-        m = Model("test")
+        m = Model.create("test")
         t = m.add_var()
 
         with pytest.raises(ZeroDivisionError):
             expr = t / 0
 
     def test_var_var_add(self):
-        m = Model("test")
+        m = Model.create("test")
         a = m.add_var()
         b = m.add_var()
 
@@ -170,7 +176,7 @@ class TestVar:
         assert expr._signature() == ((), ((0, 2),), 0)
 
     def test_var_var_sub(self):
-        m = Model("test")
+        m = Model.create("test")
         a = m.add_var()
         b = m.add_var()
 
@@ -183,7 +189,7 @@ class TestVar:
         assert expr._signature() == ((), (), 0)
 
     def test_var_var_div(self):
-        m = Model("test")
+        m = Model.create("test")
         a = m.add_var()
         b = m.add_var()
 
@@ -193,7 +199,7 @@ class TestVar:
 
 class TestExpr:
     def test_expr_neg(self):
-        m = Model("test")
+        m = Model.create("test")
         a = m.add_var()
         b = m.add_var()
         c = m.add_var()
@@ -206,7 +212,7 @@ class TestExpr:
 
     @pytest.mark.parametrize("coeff", (-1, 0, 1, 1.5))
     def test_expr_num_add(self, coeff: float):
-        m = Model("test")
+        m = Model.create("test")
         a = m.add_var()
         b = m.add_var()
 
@@ -222,7 +228,7 @@ class TestExpr:
 
     @pytest.mark.parametrize("coeff", (-1, 0, 1, 1.5))
     def test_expr_num_sub(self, coeff: float):
-        m = Model("test")
+        m = Model.create("test")
         a = m.add_var()
         b = m.add_var()
 
@@ -238,7 +244,7 @@ class TestExpr:
 
     @pytest.mark.parametrize("coeff", (-1, 1, 1.5))
     def test_expr_num_mul_nonzero(self, coeff: float):
-        m = Model("test")
+        m = Model.create("test")
         a = m.add_var()
         b = m.add_var()
 
@@ -253,7 +259,7 @@ class TestExpr:
         assert expr._signature() == ((), ((0, 1 * coeff), (1, 2 * coeff)), coeff)
 
     def test_expr_num_mul_zero(self):
-        m = Model("test")
+        m = Model.create("test")
         a = m.add_var()
         b = m.add_var()
 
@@ -265,7 +271,7 @@ class TestExpr:
 
     @pytest.mark.parametrize("coeff", (-1, 1, 1.5))
     def test_expr_num_div_nonzero(self, coeff: float):
-        m = Model("test")
+        m = Model.create("test")
         a = m.add_var()
         b = m.add_var()
 
@@ -276,7 +282,7 @@ class TestExpr:
         assert expr._signature() == ((), ((0, 1 / coeff), (1, 2 / coeff)), 1 / coeff)
 
     def test_expr_num_div_zero(self):
-        m = Model("test")
+        m = Model.create("test")
         a = m.add_var()
         b = m.add_var()
 
@@ -286,7 +292,7 @@ class TestExpr:
             expr = og / 0
 
     def test_expr_var_add(self):
-        m = Model("test")
+        m = Model.create("test")
         a = m.add_var()
         b = m.add_var()
         c = m.add_var()
@@ -306,7 +312,7 @@ class TestExpr:
         assert expr._signature() == ((), ((0, 1), (1, 2), (2, 1)), 1)
 
     def test_expr_var_sub(self):
-        m = Model("test")
+        m = Model.create("test")
         a = m.add_var()
         b = m.add_var()
         c = m.add_var()
@@ -326,7 +332,7 @@ class TestExpr:
         assert expr._signature() == ((), ((0, 1), (1, 2), (2, -1)), 1)
 
     def test_expr_expr_add(self):
-        m = Model("test")
+        m = Model.create("test")
         a = m.add_var()
         b = m.add_var()
         c = m.add_var()
@@ -346,7 +352,7 @@ class TestExpr:
         assert expr._signature() == ((), ((0, -1), (1, 2), (2, 1)), 3)
 
     def test_expr_expr_sub(self):
-        m = Model("test")
+        m = Model.create("test")
         a = m.add_var()
         b = m.add_var()
         c = m.add_var()
@@ -368,7 +374,7 @@ class TestExpr:
 
 class TestConstr:
     def test_var_num(self):
-        m = Model("test")
+        m = Model.create("test")
         a = m.add_var()
 
         assert isinstance(a == 1, Constr)
@@ -379,7 +385,7 @@ class TestConstr:
         assert isinstance(1 >= a, Constr)
 
     def test_var_var(self):
-        m = Model("test")
+        m = Model.create("test")
         a = m.add_var()
         b = m.add_var()
 
@@ -397,7 +403,7 @@ class TestConstr:
         assert isinstance(b >= a, Constr)
 
     def test_expr_num(self):
-        m = Model("test")
+        m = Model.create("test")
         a = m.add_var()
         b = m.add_var()
 
@@ -411,7 +417,7 @@ class TestConstr:
         assert isinstance(1 >= expr, Constr)
 
     def test_expr_var(self):
-        m = Model("test")
+        m = Model.create("test")
         a = m.add_var()
         b = m.add_var()
         c = m.add_var()
@@ -438,7 +444,7 @@ class TestConstr:
         assert isinstance(c >= expr, Constr)
 
     def test_expr_expr(self):
-        m = Model("test")
+        m = Model.create("test")
         a = m.add_var()
         b = m.add_var()
         c = m.add_var()

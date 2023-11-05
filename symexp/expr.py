@@ -12,6 +12,7 @@ from typing import (
     Sequence,
     Callable,
     ParamSpec,
+    Type,
 )
 from dataclasses import dataclass
 import math
@@ -195,6 +196,7 @@ class QuadExpr(Expr):
     # --------------
     # Operators
 
+    @typechecked
     def __add__(self, other: QuadExprOrNumber) -> "QuadExpr":
         if isinstance(other, (float, int)):
             if abs(other) < _EPS:
@@ -208,6 +210,7 @@ class QuadExpr(Expr):
             self.const_expr() + other.const_expr(),
         )
 
+    @typechecked
     def __mul__(self, other: Union[float, int]) -> "QuadExpr":
         if abs(other - 1) < _EPS:
             return self
@@ -259,17 +262,29 @@ class LinExpr(QuadExpr):
     # --------------
     # Operators
 
+    @overload
     def __add__(self, other: LinExprOrNumber) -> "LinExpr":
+        ...
+
+    @overload
+    def __add__(self, other: QuadExpr) -> QuadExpr:
+        ...
+
+    @typechecked
+    def __add__(self, other: QuadExprOrNumber) -> Union["LinExpr", QuadExpr]:
         if isinstance(other, (float, int)):
             if abs(other) < _EPS:
                 return self
             return _LinExpr(self.model(), self.lin_expr(), self.const_expr() + other)
         assert self.model() == other.model(), "Expressions must come from the same model"
-        return _LinExpr(
-            self.model(),
-            _add_expr(self.lin_expr(), other.lin_expr()),
-            self.const_expr() + other.const_expr(),
-        )
+        if isinstance(other, LinExpr):
+            return _LinExpr(
+                self.model(),
+                _add_expr(self.lin_expr(), other.lin_expr()),
+                self.const_expr() + other.const_expr(),
+            )
+        else:
+            return other + self
 
     @overload
     def __mul__(self, other: "LinExpr") -> "QuadExpr":
@@ -279,6 +294,7 @@ class LinExpr(QuadExpr):
     def __mul__(self, other: Union[float, int]) -> "LinExpr":
         ...
 
+    @typechecked
     def __mul__(self, other: Union["LinExpr", float, int]) -> Union["LinExpr", "QuadExpr"]:
         if isinstance(other, (float, int)):
             if abs(other - 1) < _EPS:
@@ -705,8 +721,275 @@ def _cache(func: Callable[_P, _T]) -> Callable[_P, _T]:
 _ExprT = TypeVar("_ExprT", QuadExpr, LinExpr)
 
 
-class Model(Generic[_ExprT]):
-    def __init__(self, name: str, M: float = 1e5):
+class Model(ABC, Generic[_ExprT]):
+    # -------------
+    # add_var
+
+    # fmt: off
+    @overload
+    @abstractmethod
+    def add_var(self, vtype: Literal[VType.BINARY], ub: float = 1, lb: float = 0, name: Optional[str] = None) -> BinVar: ...
+    @overload
+    @abstractmethod
+    def add_var(self, vtype: Literal[VType.INTEGER], ub: Literal[1], lb: Literal[0] = 0, name: Optional[str] = None) -> BinVar: ...
+    @overload
+    @abstractmethod
+    def add_var(self, vtype: Literal[VType.INTEGER], ub: float = _INF, lb: float = 0, name: Optional[str] = None) -> Var: ...
+    @overload
+    @abstractmethod
+    def add_var(self, vtype: VType = VType.CONTINUOUS, ub: float = _INF, lb: float = 0, name: Optional[str] = None) -> Var: ...
+    # fmt: on
+    @abstractmethod
+    def add_var(
+        self, vtype: VType = VType.CONTINUOUS, ub: float = _INF, lb: float = 0, name: Optional[str] = None
+    ) -> Var:
+        ...
+
+    # -------------
+    # add_vars
+
+    # fmt: off
+    @overload
+    @abstractmethod
+    def add_vars(self, n: int, vtype: Literal[VType.BINARY], ub: float = 1, lb: float = 0, name: Optional[str] = None) -> list[BinVar]: ...
+    @overload
+    @abstractmethod
+    def add_vars(self, n: int, vtype: Literal[VType.INTEGER], ub: Literal[1], lb: Literal[0] = 0, name: Optional[str] = None) -> list[BinVar]: ...
+    @overload
+    @abstractmethod
+    def add_vars(self, n: int, vtype: Literal[VType.INTEGER], ub: float = _INF, lb: float = 0, name: Optional[str] = None) -> list[Var]: ...
+    @overload
+    @abstractmethod
+    def add_vars(self, n: int, vtype: VType = VType.CONTINUOUS, ub: float = _INF, lb: float = 0, name: Optional[str] = None) -> list[Var]: ...
+    # fmt: on
+    @abstractmethod
+    def add_vars(
+        self, n: int, vtype: VType = VType.CONTINUOUS, ub: float = _INF, lb: float = 0, name: Optional[str] = None
+    ) -> Union[list[Var], list[BinVar]]:
+        ...
+
+    # ----------------
+    # Member functions
+
+    @abstractmethod
+    def add_constraint(
+        self, constr: Constr[_ExprT], name: Optional[str] = None, if_: Optional[BinExprOrLiteral] = None
+    ):
+        ...
+
+    @abstractmethod
+    def set_objective(self, sense: Sense, expr: _ExprT):
+        ...
+
+    @abstractmethod
+    def set_solution(self, solution: Solution):
+        ...
+
+    @abstractmethod
+    def check_solution_satisfies_constraints(self, solution: Solution, verbose: bool = False) -> bool:
+        ...
+
+    @abstractmethod
+    def enforce_solution(self, solution: Solution):
+        ...
+
+    # ----------------
+    # Getters
+
+    @abstractmethod
+    def get_vars(self) -> list[Var]:
+        ...
+
+    @abstractmethod
+    def get_constraint(self) -> list[Constr]:
+        ...
+
+    @abstractmethod
+    def get_objective(self) -> _ExprT:
+        ...
+
+    @abstractmethod
+    def get_objective_sense(self) -> Sense:
+        ...
+
+    # ----------------
+    # Syntactic Sugar
+
+    @overload
+    @abstractmethod
+    def sum(self, xs: Iterable[LinExpr]) -> LinExpr:
+        ...
+
+    @overload
+    @abstractmethod
+    def sum(self, xs: Iterable[QuadExpr]) -> QuadExpr:
+        ...
+
+    @abstractmethod
+    def sum(self, xs: Iterable[Union[LinExpr, QuadExpr]]) -> Union[LinExpr, QuadExpr]:
+        ...
+
+    @abstractmethod
+    def and_(self, *x: BinExprOrLiteral, name: Optional[str] = None) -> BinExpr:
+        """Returns a new variable y := and(x_0, ..., x_{n-1}).
+
+        If n is 1, returns x_0.
+        """
+        ...
+
+    @abstractmethod
+    def or_(self, *x: BinExprOrLiteral, name: Optional[str] = None) -> BinExpr:
+        """Returns a new variable y := or(x_0, ..., x_{n-1})
+
+        If n is 1, returns x_0.
+        """
+        ...
+
+    @abstractmethod
+    def min_(self, *x: Union[_ExprT, Number], name: Optional[str] = None) -> _MinMaxResult[_ExprT]:
+        """Creates a new variable y := min(x_0, ..., x_{n-1}).
+        Note: n auxilary binary variables are also created.
+
+        Returns: (y, argmin).
+
+        If n is 1, returns (x_0, [1]) (no variables created).
+        """
+        ...
+
+    @abstractmethod
+    def max_(self, *x: Union[_ExprT, Number], name: Optional[str] = None) -> _MinMaxResult[_ExprT]:
+        """Creates a new variable y := max(x_0, ..., x_{n-1}).
+        Note: n auxilary binary variables are also created.
+
+        Returns: (y, argmax).
+
+        If n is 1, returns (x_0, [1]) (no variables created).
+        """
+        ...
+
+    @abstractmethod
+    def abs_(self, x: Union[_ExprT, Number], name: Optional[str] = None) -> _ExprT:
+        """Returns a new variable y := abs(x).
+        Note: two auxilary binary variables are also created."""
+        ...
+
+    @abstractmethod
+    def mux_(
+        self,
+        *cond_expr: tuple[BinExprOrLiteral, Union[_ExprT, Number]],
+        name: Optional[str] = None,
+        else_: Optional[Union[_ExprT, Number]] = None,
+    ) -> _ExprT:
+        """Creates a new variable y := expr_0 if cond_0; ...; expr_{n-1} if cond_{n-1}.
+        Assumes exactly one cond_i is true or at most one cond_i if else_ is specified.
+
+        if n is 1, returns expr_0 (no variables created).
+        """
+        ...
+
+    @abstractmethod
+    def bmux_(
+        self,
+        *cond_expr: tuple[BinExprOrLiteral, BinExprOrLiteral],
+        name: Optional[str] = None,
+        else_: Optional[BinExprOrLiteral] = None,
+    ) -> BinExpr:
+        """Creates a new variable y := expr_0 if cond_0; ...; expr_{n-1} if cond_{n-1}.
+        Assumes exactly one cond_i is true.
+
+        if n is 1, returns expr_0 (no variables created).
+        """
+        ...
+
+    @abstractmethod
+    def muxT_(
+        self, cond: Sequence[BinExprOrLiteral], expr: Sequence[Union[_ExprT, Number]], name: Optional[str] = None
+    ) -> _ExprT:
+        """Creates a new variable y := expr_0 if cond_0; ...; expr_{n-1} if cond_{n-1}.
+
+        Assumes exactly one cond_i is true.
+        """
+        ...
+
+    def bmuxT_(
+        self, cond: Sequence[BinExprOrLiteral], expr: Sequence[BinExprOrLiteral], name: Optional[str] = None
+    ) -> BinExpr:
+        """Creates a new variable y := expr_0 if cond_0; ...; expr_{n-1} if cond_{n-1}.
+
+        Assumes exactly one cond_i is true.
+        """
+        ...
+
+    @abstractmethod
+    def min_en_(
+        self, *en_x: tuple[BinExprOrLiteral, Union[_ExprT, Number]], name: Optional[str] = None
+    ) -> _MinMaxResult[_ExprT]:
+        """Creates a new variable y := min({x_i if en_i}).
+        Assumes at most en_i is true.
+        Note: n + 1 auxilary binary variables are also created.
+
+        Returns: (y, argmin).
+        If all en_i are false, Model._M is returned.
+        """
+        ...
+
+    @abstractmethod
+    def min_enT_(
+        self, en: Sequence[BinExprOrLiteral], x: Sequence[Union[_ExprT, Number]], name: Optional[str] = None
+    ) -> _MinMaxResult[_ExprT]:
+        """Creates a new variable y := min({x_i if en_i}).
+        Assumes at most en_i is true.
+        Note: n + 1 auxilary binary variables are also created.
+
+        Returns: (y, argmin).
+        If all en_i are false, Model._M is returned.
+        """
+        ...
+
+    # ------------
+    # Utils
+
+    @abstractmethod
+    def __repr__(self) -> str:
+        ...
+
+    @abstractmethod
+    def _gen_name(self, pref: str = "T") -> str:
+        ...
+
+    @abstractmethod
+    def _clip_M(self, cand_M: float) -> float:
+        ...
+
+    @abstractmethod
+    def _convert(self, expr: Union[_ExprT, Number]) -> _ExprT:
+        ...
+
+    @abstractmethod
+    def _convert_bin(self, x: BinExprOrLiteral) -> BinExpr:
+        """
+        Convert x to IBinExpr
+        """
+        ...
+
+    @overload
+    @classmethod
+    def create(cls, name: str, type: Type[LinExpr] = LinExpr, M: float = 1e5) -> "Model[LinExpr]":
+        ...
+
+    @overload
+    @classmethod
+    def create(cls, name: str, type: Type[QuadExpr], M: float = 1e5) -> "Model[QuadExpr]":
+        ...
+
+    @classmethod
+    def create(cls, name: str, type: Union[Type[LinExpr], Type[QuadExpr]] = LinExpr, M: float = 1e5) -> "Model":
+        return _Model(type, name, M)
+
+
+class _Model(Model):
+    def __init__(self, type: Union[Type[LinExpr], Type[QuadExpr]], name: str, M: float):
+        self._type = type
         self._name = name
         self._vars: list[Var] = []
         self._constrs: list[Constr[QuadExpr]] = []
@@ -770,9 +1053,11 @@ class Model(Generic[_ExprT]):
     # ----------------
     # Member functions
 
-    def add_constraint(self, constr: Constr[_ExprT], name: Optional[str] = None, if_: Optional[BinExprOrLiteral] = None):
-    # def add_constraint(self, constr: Constr, name: Optional[str] = None, if_: Optional[BinExprOrLiteral] = None):
-        constr = check_type(constr, Constr[_ExprT])
+    def add_constraint(
+        self, constr: Constr[QuadExpr], name: Optional[str] = None, if_: Optional[BinExprOrLiteral] = None
+    ):
+        assert isinstance(constr.get_expr(), self._type), "Unsupported constraints"
+
         name = name or self._gen_name("C")
 
         if isinstance(if_, BinExpr):
@@ -789,7 +1074,8 @@ class Model(Generic[_ExprT]):
             constr._name = name
             self._constrs.append(constr)
 
-    def set_objective(self, sense: Sense, expr: _ExprT):
+    def set_objective(self, sense: Sense, expr: QuadExpr):
+        assert isinstance(expr, self._type), "Unsupported expression"
         self._obj_sense = sense
         self._obj = expr
 
@@ -829,9 +1115,9 @@ class Model(Generic[_ExprT]):
     def get_constraint(self) -> list[Constr]:
         return [*self._constrs]
 
-    def get_objective(self) -> _ExprT:
+    def get_objective(self) -> QuadExpr:
         assert self._obj is not None and self._obj_sense is not None, "No objective set"
-        return check_type(self._obj, _ExprT)
+        return check_type(self._obj, QuadExpr)
 
     def get_objective_sense(self) -> Sense:
         assert self._obj is not None and self._obj_sense is not None, "No objective set"
@@ -886,7 +1172,7 @@ class Model(Generic[_ExprT]):
         return d
 
     @_cache
-    def min_(self, *x: Union[_ExprT, Number], name: Optional[str] = None) -> _MinMaxResult[_ExprT]:
+    def min_(self, *x: Union[QuadExpr, Number], name: Optional[str] = None) -> _MinMaxResult[QuadExpr]:
         """Creates a new variable y := min(x_0, ..., x_{n-1}).
         Note: n auxilary binary variables are also created.
 
@@ -909,10 +1195,10 @@ class Model(Generic[_ExprT]):
             self.add_constraint(y <= x_, f"{name}/C1[{i}]")
             self.add_constraint(y >= x_ - self._clip_M(x_.bound().max - L_min) * (1 - d[i]), f"{name}/C2[{i}]")
         self.add_constraint(self.sum(d) == 1, f"{name}/C3")
-        return check_type(_MinMaxResult(y, d), _MinMaxResult[_ExprT])
+        return check_type(_MinMaxResult(y, d), _MinMaxResult[QuadExpr])
 
     @_cache
-    def max_(self, *x: Union[_ExprT, Number], name: Optional[str] = None) -> _MinMaxResult[_ExprT]:
+    def max_(self, *x: Union[QuadExpr, Number], name: Optional[str] = None) -> _MinMaxResult[QuadExpr]:
         """Creates a new variable y := max(x_0, ..., x_{n-1}).
         Note: n auxilary binary variables are also created.
 
@@ -935,10 +1221,10 @@ class Model(Generic[_ExprT]):
             self.add_constraint(y >= x_, f"{name}/C1[{i}]")
             self.add_constraint(y <= x_ + self._clip_M(U_max - x_.bound().min) * (1 - d[i]), f"{name}/C2[{i}]")
         self.add_constraint(self.sum(d) == 1, f"{name}/C3")
-        return check_type(_MinMaxResult(y, d), _MinMaxResult[_ExprT])
+        return check_type(_MinMaxResult(y, d), _MinMaxResult[QuadExpr])
 
     @_cache
-    def abs_(self, x: Union[_ExprT, Number], name: Optional[str] = None) -> _ExprT:
+    def abs_(self, x: Union[QuadExpr, Number], name: Optional[str] = None) -> QuadExpr:
         """Returns a new variable y := abs(x).
         Note: two auxilary binary variables are also created."""
         x_ = self._convert(x)
@@ -953,15 +1239,15 @@ class Model(Generic[_ExprT]):
         self.add_constraint(y <= x_ + self._clip_M(U - x_.bound().min) * ~d, f"{name}/C2[0]")
         self.add_constraint(y <= -x_ + self._clip_M(U - (-x_).bound().max) * d, f"{name}/C2[1]")
 
-        return check_type(y, _ExprT)
+        return check_type(y, QuadExpr)
 
     @_cache
     def mux_(
         self,
-        *cond_expr: tuple[BinExprOrLiteral, Union[_ExprT, Number]],
+        *cond_expr: tuple[BinExprOrLiteral, Union[QuadExpr, Number]],
         name: Optional[str] = None,
-        else_: Optional[Union[_ExprT, Number]] = None,
-    ) -> _ExprT:
+        else_: Optional[Union[QuadExpr, Number]] = None,
+    ) -> QuadExpr:
         """Creates a new variable y := expr_0 if cond_0; ...; expr_{n-1} if cond_{n-1}.
         Assumes exactly one cond_i is true or at most one cond_i if else_ is specified.
 
@@ -987,7 +1273,7 @@ class Model(Generic[_ExprT]):
         for i, (cond, expr) in enumerate(cond_expr):
             self.add_constraint(y <= expr + self._clip_M(U_max - expr.bound().min) * (1 - cond), f"{name}/C1[{i}]")
             self.add_constraint(y >= expr - self._clip_M(expr.bound().max - L_min) * (1 - cond), f"{name}/C2[{i}]")
-        return check_type(y, _ExprT)
+        return check_type(y, QuadExpr)
 
     @_cache
     def bmux_(
@@ -1021,8 +1307,8 @@ class Model(Generic[_ExprT]):
         return y
 
     def muxT_(
-        self, cond: Sequence[BinExprOrLiteral], expr: Sequence[Union[_ExprT, Number]], name: Optional[str] = None
-    ) -> _ExprT:
+        self, cond: Sequence[BinExprOrLiteral], expr: Sequence[Union[QuadExpr, Number]], name: Optional[str] = None
+    ) -> QuadExpr:
         """Creates a new variable y := expr_0 if cond_0; ...; expr_{n-1} if cond_{n-1}.
 
         Assumes exactly one cond_i is true.
@@ -1042,8 +1328,8 @@ class Model(Generic[_ExprT]):
 
     @_cache
     def min_en_(
-        self, *en_x: tuple[BinExprOrLiteral, Union[_ExprT, Number]], name: Optional[str] = None
-    ) -> _MinMaxResult[_ExprT]:
+        self, *en_x: tuple[BinExprOrLiteral, Union[QuadExpr, Number]], name: Optional[str] = None
+    ) -> _MinMaxResult[QuadExpr]:
         """Creates a new variable y := min({x_i if en_i}).
         Assumes at most en_i is true.
         Note: n + 1 auxilary binary variables are also created.
@@ -1067,11 +1353,11 @@ class Model(Generic[_ExprT]):
             self.add_constraint(d[i] <= en, f"{name}/C3[{i}]")
         self.add_constraint(self.sum(d) == 1, f"{name}/C4")
         self.add_constraint(y == self._M, if_=d[n], name=f"{name}/C5")
-        return check_type(_MinMaxResult(y, d), _MinMaxResult[_ExprT])
+        return check_type(_MinMaxResult(y, d), _MinMaxResult[QuadExpr])
 
     def min_enT_(
-        self, en: Sequence[BinExprOrLiteral], x: Sequence[Union[_ExprT, Number]], name: Optional[str] = None
-    ) -> _MinMaxResult[_ExprT]:
+        self, en: Sequence[BinExprOrLiteral], x: Sequence[Union[QuadExpr, Number]], name: Optional[str] = None
+    ) -> _MinMaxResult[QuadExpr]:
         """Creates a new variable y := min({x_i if en_i}).
         Assumes at most en_i is true.
         Note: n + 1 auxilary binary variables are also created.
@@ -1109,9 +1395,9 @@ class Model(Generic[_ExprT]):
         cand_M = max(cand_M, 0)
         return self._M if math.isinf(cand_M) else cand_M
 
-    def _convert(self, expr: Union[_ExprT, Number]) -> _ExprT:
+    def _convert(self, expr: Union[QuadExpr, Number]) -> QuadExpr:
         if isinstance(expr, (float, int)):
-            return check_type(_LinExpr(self, {}, expr), _ExprT)
+            return check_type(_LinExpr(self, {}, expr), QuadExpr)
         else:
             assert self == expr.model(), "Expressions must come from the same model"
             return expr
@@ -1180,6 +1466,6 @@ def _minmax(arg: Number, *args: Number) -> Bound:
 
 
 if __name__ == "__main__":
-    model = Model("Hello")
+    model = Model.create("Hello")
     var = _TypVar(model, 0, "", 0, 1, VType.BINARY)
     var = _BinVar(model, 0, "")
