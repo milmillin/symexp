@@ -113,7 +113,7 @@ class QuadExpr(Expr):
         quad_vars = sorted(self.quad_expr().items(), key=lambda kv: (kv[0][0].index(), kv[0][1].index()))
         first = True
         for (v1, v2), coeff in quad_vars:
-            sgn = "+" if coeff > 0 else "-"
+            sgn = "+" if coeff >= 0 else "-"
             if first and sgn == "+":
                 sgn = ""
             coeff_ = str(abs(coeff)) if abs(coeff - 1) > _EPS else ""
@@ -121,15 +121,15 @@ class QuadExpr(Expr):
             first = False
         lin_vars = sorted(self.lin_expr().items(), key=lambda kv: kv[0].index())
         for v, coeff in lin_vars:
-            sgn = "+" if coeff > 0 else "-"
+            sgn = "+" if coeff >= 0 else "-"
             if first and sgn == "+":
                 sgn = ""
             coeff_ = str(abs(coeff)) if abs(coeff - 1) > _EPS else ""
             res += f"{sgn} {coeff_}{v} "
             first = False
         const = self.const_expr()
-        if abs(const) > _EPS:
-            sgn = "+" if const > 0 else "-"
+        if abs(const) > _EPS or first:
+            sgn = "+" if const >= 0 else "-"
             if first and sgn == "+":
                 sgn = ""
             res += f"{sgn} {abs(const)}"
@@ -140,7 +140,7 @@ class QuadExpr(Expr):
         quad_vars = sorted(self.quad_expr().items(), key=lambda kv: (kv[0][0].index(), kv[0][1].index()))
         first = True
         for (v1, v2), coeff in quad_vars:
-            sgn = "+" if coeff > 0 else "-"
+            sgn = "+" if coeff >= 0 else "-"
             if first and sgn == "+":
                 sgn = ""
             coeff_ = str(abs(coeff)) if abs(coeff - 1) > _EPS else ""
@@ -148,15 +148,15 @@ class QuadExpr(Expr):
             first = False
         lin_vars = sorted(self.lin_expr().items(), key=lambda kv: kv[0].index())
         for v, coeff in lin_vars:
-            sgn = "+" if coeff > 0 else "-"
+            sgn = "+" if coeff >= 0 else "-"
             if first and sgn == "+":
                 sgn = ""
             coeff_ = str(abs(coeff)) if abs(coeff - 1) > _EPS else ""
             res += f"{sgn}{coeff_}{v.compact_repr()}"
             first = False
         const = self.const_expr()
-        if abs(const) > _EPS:
-            sgn = "+" if const > 0 else "-"
+        if abs(const) > _EPS or first:
+            sgn = "+" if const >= 0 else "-"
             if first and sgn == "+":
                 sgn = ""
             res += f"{sgn}{abs(const)}"
@@ -171,11 +171,13 @@ class QuadExpr(Expr):
         return float(res)
 
     def _signature(self) -> _Signature:
-        quad_vars = sorted(self.quad_expr().items(), key=lambda kv: (kv[0][0].index(), kv[0][1].index()))
-        lin_vars = sorted(self.lin_expr().items(), key=lambda kv: kv[0].index())
+        # quad_vars = sorted(self.quad_expr().items(), key=lambda kv: (kv[0][0].index(), kv[0][1].index()))
+        # lin_vars = sorted(self.lin_expr().items(), key=lambda kv: kv[0].index())
+        quad_vars = sorted([((v1.index(), v2.index()), c) for (v1, v2), c in self.quad_expr().items()])
+        lin_vars = sorted([(v.index(), c) for v, c in self.lin_expr().items()])
         return (
-            tuple((v1.index(), v2.index(), c) for (v1, v2), c in quad_vars),
-            tuple((v.index(), c) for v, c in lin_vars),
+            tuple((v1, v2, c) for (v1, v2), c in quad_vars),
+            tuple((v, c) for v, c in lin_vars),
             float(self.const_expr()),
         )
 
@@ -602,7 +604,7 @@ class _BinVar(BinVar):
         return self._value
 
     def set_value(self, value: float) -> None:
-        assert value == 1 or value == 0, "Invalid value"
+        assert value == 1 or value == 0, f"Invalid value. Got {value}"
         self._value = value
 
     def is_continuous(self) -> bool:
@@ -632,6 +634,9 @@ class _BinLiteral(BinExpr):
     def __invert__(self) -> BinExpr:
         return _BinLiteral(self._model, 1 if self._value == 0 else 0)
 
+    def __hash__(self):
+        return hash(self._signature())
+
 
 class _BinVarNeg(BinExpr):
     def __init__(self, var: BinVar):
@@ -648,6 +653,9 @@ class _BinVarNeg(BinExpr):
 
     def __invert__(self) -> BinExpr:
         return self._var
+    
+    def __hash__(self):
+        return hash(self._signature())
 
 
 class _UncheckedBinExpr(_LinExpr, BinExpr):
@@ -656,6 +664,9 @@ class _UncheckedBinExpr(_LinExpr, BinExpr):
 
     def __invert__(self) -> BinExpr:
         return _UncheckedBinExpr(1 - self)
+
+    def __hash__(self):
+        return hash(self._signature())
 
 
 # --------------------
@@ -722,6 +733,7 @@ def _cache(func: Callable[_P, _T]) -> Callable[_P, _T]:
 
 
 _ExprT = TypeVar("_ExprT", QuadExpr, LinExpr)
+_ExprT2 = TypeVar("_ExprT2", QuadExpr, LinExpr)
 
 
 class Model(ABC, Generic[_ExprT]):
@@ -776,7 +788,7 @@ class Model(ABC, Generic[_ExprT]):
 
     @abstractmethod
     def add_constraint(
-        self, constr: Constr[_ExprT], name: Optional[str] = None, if_: Optional[BinExprOrLiteral] = None
+        self, constr: Union[Constr[_ExprT], bool], name: Optional[str] = None, if_: Optional[BinExprOrLiteral] = None
     ):
         ...
 
@@ -820,16 +832,16 @@ class Model(ABC, Generic[_ExprT]):
 
     @overload
     @abstractmethod
-    def sum(self, xs: Iterable[LinExpr]) -> LinExpr:
+    def sum(self, xs: Iterable[Union[LinExpr, Number]]) -> LinExpr:
         ...
 
     @overload
     @abstractmethod
-    def sum(self, xs: Iterable[QuadExpr]) -> QuadExpr:
+    def sum(self, xs: Iterable[Union[QuadExpr, Number]]) -> QuadExpr:
         ...
 
     @abstractmethod
-    def sum(self, xs: Iterable[Union[LinExpr, QuadExpr]]) -> Union[LinExpr, QuadExpr]:
+    def sum(self, xs: Iterable[Union[LinExpr, QuadExpr, Number]]) -> Union[LinExpr, QuadExpr]:
         ...
 
     @abstractmethod
@@ -849,7 +861,7 @@ class Model(ABC, Generic[_ExprT]):
         ...
 
     @abstractmethod
-    def min_(self, *x: Union[_ExprT, Number], name: Optional[str] = None) -> _MinMaxResult[_ExprT]:
+    def min_(self, *x: Union[_ExprT2, Number], name: Optional[str] = None) -> _MinMaxResult[_ExprT2]:
         """Creates a new variable y := min(x_0, ..., x_{n-1}).
         Note: n auxilary binary variables are also created.
 
@@ -860,7 +872,7 @@ class Model(ABC, Generic[_ExprT]):
         ...
 
     @abstractmethod
-    def max_(self, *x: Union[_ExprT, Number], name: Optional[str] = None) -> _MinMaxResult[_ExprT]:
+    def max_(self, *x: Union[_ExprT2, Number], name: Optional[str] = None) -> _MinMaxResult[_ExprT2]:
         """Creates a new variable y := max(x_0, ..., x_{n-1}).
         Note: n auxilary binary variables are also created.
 
@@ -871,7 +883,7 @@ class Model(ABC, Generic[_ExprT]):
         ...
 
     @abstractmethod
-    def abs_(self, x: Union[_ExprT, Number], name: Optional[str] = None) -> _ExprT:
+    def abs_(self, x: Union[_ExprT2, Number], name: Optional[str] = None) -> _ExprT2:
         """Returns a new variable y := abs(x).
         Note: two auxilary binary variables are also created."""
         ...
@@ -879,10 +891,10 @@ class Model(ABC, Generic[_ExprT]):
     @abstractmethod
     def mux_(
         self,
-        *cond_expr: tuple[BinExprOrLiteral, Union[_ExprT, Number]],
+        *cond_expr: tuple[BinExprOrLiteral, Union[_ExprT2, Number]],
         name: Optional[str] = None,
-        else_: Optional[Union[_ExprT, Number]] = None,
-    ) -> _ExprT:
+        else_: Optional[Union[_ExprT2, Number]] = None,
+    ) -> _ExprT2:
         """Creates a new variable y := expr_0 if cond_0; ...; expr_{n-1} if cond_{n-1}.
         Assumes exactly one cond_i is true or at most one cond_i if else_ is specified.
 
@@ -906,8 +918,8 @@ class Model(ABC, Generic[_ExprT]):
 
     @abstractmethod
     def muxT_(
-        self, cond: Sequence[BinExprOrLiteral], expr: Sequence[Union[_ExprT, Number]], name: Optional[str] = None
-    ) -> _ExprT:
+        self, cond: Sequence[BinExprOrLiteral], expr: Sequence[Union[_ExprT2, Number]], name: Optional[str] = None
+    ) -> _ExprT2:
         """Creates a new variable y := expr_0 if cond_0; ...; expr_{n-1} if cond_{n-1}.
 
         Assumes exactly one cond_i is true.
@@ -925,8 +937,8 @@ class Model(ABC, Generic[_ExprT]):
 
     @abstractmethod
     def min_en_(
-        self, *en_x: tuple[BinExprOrLiteral, Union[_ExprT, Number]], name: Optional[str] = None
-    ) -> _MinMaxResult[_ExprT]:
+        self, *en_x: tuple[BinExprOrLiteral, Union[_ExprT2, Number]], name: Optional[str] = None
+    ) -> _MinMaxResult[_ExprT2]:
         """Creates a new variable y := min({x_i if en_i}).
         Assumes at most en_i is true.
         Note: n + 1 auxilary binary variables are also created.
@@ -938,8 +950,8 @@ class Model(ABC, Generic[_ExprT]):
 
     @abstractmethod
     def min_enT_(
-        self, en: Sequence[BinExprOrLiteral], x: Sequence[Union[_ExprT, Number]], name: Optional[str] = None
-    ) -> _MinMaxResult[_ExprT]:
+        self, en: Sequence[BinExprOrLiteral], x: Sequence[Union[_ExprT2, Number]], name: Optional[str] = None
+    ) -> _MinMaxResult[_ExprT2]:
         """Creates a new variable y := min({x_i if en_i}).
         Assumes at most en_i is true.
         Note: n + 1 auxilary binary variables are also created.
@@ -963,9 +975,19 @@ class Model(ABC, Generic[_ExprT]):
     @abstractmethod
     def _clip_M(self, cand_M: float) -> float:
         ...
+    
+    @overload
+    @abstractmethod
+    def _convert(self, expr: Union[LinExpr, Number]) -> LinExpr:
+        ...
+
+    @overload
+    @abstractmethod
+    def _convert(self, expr: QuadExpr) -> QuadExpr:
+        ...
 
     @abstractmethod
-    def _convert(self, expr: Union[_ExprT, Number]) -> _ExprT:
+    def _convert(self, expr: Union[QuadExpr, LinExpr, Number]) -> Union[QuadExpr, LinExpr]:
         ...
 
     @abstractmethod
@@ -1057,8 +1079,12 @@ class _Model(Model):
     # Member functions
 
     def add_constraint(
-        self, constr: Constr[QuadExpr], name: Optional[str] = None, if_: Optional[BinExprOrLiteral] = None
+        self, constr: Union[Constr[QuadExpr], bool], name: Optional[str] = None, if_: Optional[BinExprOrLiteral] = None
     ):
+        if isinstance(constr, bool):
+            if if_ is None or if_ == 1:
+                assert constr, "Constraint is always false"
+            return  # if_ false
         assert isinstance(constr.get_expr(), self._type), "Unsupported constraints"
 
         name = name or self._gen_name("C")
@@ -1096,7 +1122,7 @@ class _Model(Model):
                 res = constr.satisfied()
                 all_res = all_res and res
                 if verbose:
-                    print(f"[{'OK' if res else 'FAILED'}]: {constr}")
+                    print(f"[{'OK' if res else 'FAILED'}]: {constr} ({float(constr._lhs)} {constr._op.value} {float(constr._rhs)})")
             except AssertionError as e:
                 if verbose:
                     print(f"[SKIPPED]: {constr}")
@@ -1129,15 +1155,15 @@ class _Model(Model):
     # Syntactic Sugar
 
     @overload
-    def sum(self, xs: Iterable[LinExpr]) -> LinExpr:
+    def sum(self, xs: Iterable[Union[LinExpr, Number]]) -> LinExpr:
         ...
 
     @overload
-    def sum(self, xs: Iterable[QuadExpr]) -> QuadExpr:
+    def sum(self, xs: Iterable[Union[QuadExpr, Number]]) -> QuadExpr:
         ...
 
-    def sum(self, xs: Iterable[Union[LinExpr, QuadExpr]]) -> Union[LinExpr, QuadExpr]:
-        return sum(xs, _LinExpr(self, {}, 0))
+    def sum(self, xs: Iterable[Union[LinExpr, QuadExpr, Number]]) -> Union[LinExpr, QuadExpr]:
+        return sum((self._convert(x) for x in xs), _LinExpr(self, {}, 0))
 
     @_cache
     def and_(self, *x: BinExprOrLiteral, name: Optional[str] = None) -> BinExpr:

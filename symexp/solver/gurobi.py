@@ -12,9 +12,17 @@ _SENSE = {Sense.MAXIMIZE: GRB.MAXIMIZE, Sense.MINIMIZE: GRB.MINIMIZE}
 
 
 class GurobiSolver(Solver[_ExprT_con]):
-    def __init__(self, model: Model[_ExprT_con], num_threads: int = multiprocessing.cpu_count(), **kwargs):
+    def __init__(
+        self,
+        model: Model[_ExprT_con],
+        num_threads: int = multiprocessing.cpu_count(),
+        non_convex: bool = False,
+        **kwargs
+    ):
         self.model = gp.Model(model.name(), **kwargs)  # type: ignore
         self.model.Params.Threads = num_threads
+        if non_convex:
+            self.model.Params.NonConvex = 2
         super().__init__(model)
         self.model.update()
         self._vars = self.model.getVars()
