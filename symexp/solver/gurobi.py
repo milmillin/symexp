@@ -17,10 +17,12 @@ class GurobiSolver(Solver[_ExprT_con]):
         model: Model[_ExprT_con],
         num_threads: int = multiprocessing.cpu_count(),
         non_convex: bool = False,
+        time_limit: float = float('inf'),
         **kwargs
     ):
         self.model = gp.Model(model.name(), **kwargs)  # type: ignore
         self.model.Params.Threads = num_threads
+        self.model.Params.TimeLimit = time_limit
         if non_convex:
             self.model.Params.NonConvex = 2
         super().__init__(model)
