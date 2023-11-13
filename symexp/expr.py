@@ -450,6 +450,9 @@ class _QuadExpr(QuadExpr):
             if abs(coeff) < _EPS:
                 del self._lin_expr[var]
 
+    def __hash__(self):
+        return hash(self._signature())
+
     # -------------
     # IExpr
 
@@ -488,6 +491,9 @@ class _LinExpr(LinExpr):
         for var, coeff in lin_expr.items():
             if abs(coeff) < _EPS:
                 del self._lin_expr[var]
+
+    def __hash__(self):
+        return hash(self._signature())
 
     # -------------
     # IExpr
@@ -656,7 +662,7 @@ class _BinVarNeg(BinExpr):
 
     def __invert__(self) -> BinExpr:
         return self._var
-    
+
     def __hash__(self):
         return hash(self._signature())
 
@@ -978,7 +984,7 @@ class Model(ABC, Generic[_ExprT]):
     @abstractmethod
     def _clip_M(self, cand_M: float) -> float:
         ...
-    
+
     @overload
     @abstractmethod
     def _convert(self, expr: Union[LinExpr, Number]) -> LinExpr:
@@ -1125,7 +1131,9 @@ class _Model(Model):
                 res = constr.satisfied()
                 all_res = all_res and res
                 if verbose:
-                    print(f"[{'OK' if res else 'FAILED'}]: {constr} ({float(constr._lhs)} {constr._op.value} {float(constr._rhs)})")
+                    print(
+                        f"[{'OK' if res else 'FAILED'}]: {constr} ({float(constr._lhs)} {constr._op.value} {float(constr._rhs)})"
+                    )
             except AssertionError as e:
                 if verbose:
                     print(f"[SKIPPED]: {constr}")
