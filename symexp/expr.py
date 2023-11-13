@@ -561,6 +561,8 @@ class _TypVar(Var):
         return self._value
 
     def set_value(self, value: float) -> None:
+        if self.type() == VType.INTEGER or self.type() == VType.BINARY:
+            value = round(value)
         self._value = value
 
     def is_continuous(self) -> bool:
@@ -604,6 +606,7 @@ class _BinVar(BinVar):
         return self._value
 
     def set_value(self, value: float) -> None:
+        value = round(value)
         assert value == 1 or value == 0, f"Invalid value. Got {value}"
         self._value = value
 
