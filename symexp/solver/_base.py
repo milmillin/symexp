@@ -29,10 +29,7 @@ class Solver(ABC, Generic[_ExprT_con]):
         self._set_objective(inner_obj, obj_sense)
 
     def solve(self) -> Solution:
-        try:
-            self._solve()
-        except Exception as e:
-            print(e)
+        self._solve()
         return self._get_solution()
 
     # Solver needs to implement these functions
