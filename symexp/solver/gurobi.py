@@ -5,7 +5,7 @@ import gurobipy as gp
 from gurobipy import GRB  # type: ignore
 
 from ..expr import Model, Sense, Solution, VType, QuadExpr, LinExpr
-from ._base import Solver, _Var, _Expr, _ExprT_con
+from ._base import Solver, _Var, _Expr, _ExprT_con, ModelInfeasibleError
 
 _VTYPE = {VType.BINARY: GRB.BINARY, VType.INTEGER: GRB.INTEGER, VType.CONTINUOUS: GRB.CONTINUOUS}
 _SENSE = {Sense.MAXIMIZE: GRB.MAXIMIZE, Sense.MINIMIZE: GRB.MINIMIZE}
@@ -43,7 +43,7 @@ class GurobiSolver(Solver[_ExprT_con]):
         self.model.optimize(_callback)
         status = self.model.getAttr(GRB.Attr.Status)
         if status == GRB.INFEASIBLE or status == GRB.INF_OR_UNBD or status == GRB.UNBOUNDED:
-            raise ValueError("Model is infeasible or unbounded")
+            raise ModelInfeasibleError("Model is infeasible or unbounded")
         elif status == GRB.TIME_LIMIT:
             raise TimeoutError("Time limit exceeded")
         elif self.model.getAttr(GRB.Attr.SolCount) == 0:

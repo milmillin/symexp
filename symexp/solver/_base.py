@@ -9,6 +9,9 @@ _Expr = Any
 
 _ExprT_con = TypeVar("_ExprT_con", LinExpr, QuadExpr, contravariant=True)
 
+class ModelInfeasibleError(Exception):
+    pass
+
 class Solver(ABC, Generic[_ExprT_con]):
     def __init__(self, model: Model[_ExprT_con]):
         self.solution_found = Event[Solution, float]()
