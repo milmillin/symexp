@@ -116,7 +116,7 @@ class QuadExpr(Expr):
             sgn = "+" if coeff >= 0 else "-"
             if first and sgn == "+":
                 sgn = ""
-            coeff_ = str(abs(coeff)) if abs(coeff - 1) > _EPS else ""
+            coeff_ = str(abs(coeff)) if abs(abs(coeff) - 1) > _EPS else ""
             res += f"{sgn} {coeff_}{v1}{v2} "
             first = False
         lin_vars = sorted(self.lin_expr().items(), key=lambda kv: kv[0].index())
@@ -124,7 +124,7 @@ class QuadExpr(Expr):
             sgn = "+" if coeff >= 0 else "-"
             if first and sgn == "+":
                 sgn = ""
-            coeff_ = str(abs(coeff)) if abs(coeff - 1) > _EPS else ""
+            coeff_ = str(abs(coeff)) if abs(abs(coeff) - 1) > _EPS else ""
             res += f"{sgn} {coeff_}{v} "
             first = False
         const = self.const_expr()
@@ -143,7 +143,7 @@ class QuadExpr(Expr):
             sgn = "+" if coeff >= 0 else "-"
             if first and sgn == "+":
                 sgn = ""
-            coeff_ = str(abs(coeff)) if abs(coeff - 1) > _EPS else ""
+            coeff_ = str(abs(coeff)) if abs(abs(coeff) - 1) > _EPS else ""
             res += f"{sgn}{coeff_}{v1.compact_repr()}{v2.compact_repr()}"
             first = False
         lin_vars = sorted(self.lin_expr().items(), key=lambda kv: kv[0].index())
@@ -151,7 +151,7 @@ class QuadExpr(Expr):
             sgn = "+" if coeff >= 0 else "-"
             if first and sgn == "+":
                 sgn = ""
-            coeff_ = str(abs(coeff)) if abs(coeff - 1) > _EPS else ""
+            coeff_ = str(abs(coeff)) if abs(abs(coeff) - 1) > _EPS else ""
             res += f"{sgn}{coeff_}{v.compact_repr()}"
             first = False
         const = self.const_expr()
