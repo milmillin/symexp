@@ -61,6 +61,7 @@ class GurobiSolver(Solver[_ExprT_con]):
         self.model.update()
 
         for i, s in enumerate(solution):
+            s = self._transform_solution(s)
             self.model.params.StartNumber = i
 
             for v in self.model.getVars():
@@ -74,7 +75,7 @@ def _callback(model, where):
         xs = model.cbGetSolution(self._vars)
         runtime = model.cbGet(GRB.Callback.RUNTIME)
         sol = {var.VarName: x for var, x in zip(self._vars, xs)}
-        self.solution_found.invoke(sol, runtime)
+        self._invoke_solution_found(sol, runtime)
 
 
 # check if all abstract methods are implemented
