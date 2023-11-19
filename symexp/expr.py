@@ -66,12 +66,13 @@ class Expr(ABC):
     def compact_repr(self) -> str:
         ...
 
-    @abstractmethod
     def __float__(self) -> float:
-        ...
+        return self.get_value()
 
     def __int__(self) -> int:
-        return int(self.__float__())
+        res = self.get_value()
+        assert isinstance(res, int)
+        return res
 
     @abstractmethod
     def _signature(self) -> _Signature:
@@ -90,6 +91,10 @@ class Expr(ABC):
 
     def is_binary(self) -> bool:
         return self.bound() == (0, 1) and not self.is_continuous()
+
+    @abstractmethod
+    def get_value(self) -> Number:
+        ...
 
 
 class QuadExpr(Expr):
@@ -162,13 +167,13 @@ class QuadExpr(Expr):
             res += f"{sgn}{abs(const)}"
         return res.strip()
 
-    def __float__(self) -> float:
+    def get_value(self) -> Number:
         res = self.const_expr()
         for (v1, v2), coeff in self.quad_expr().items():
-            res += float(v1) * float(v2) * coeff
+            res += v1.get_value() * v2.get_value() * coeff
         for v, coeff in self.lin_expr().items():
-            res += float(v) * coeff
-        return float(res)
+            res += v.get_value() * coeff
+        return res
 
     def _signature(self) -> _Signature:
         # quad_vars = sorted(self.quad_expr().items(), key=lambda kv: (kv[0][0].index(), kv[0][1].index()))
@@ -401,10 +406,10 @@ class Var(LinExpr):
     def compact_repr(self) -> str:
         return f"<{self.name()}>"
 
-    def __float__(self) -> float:
+    def get_value(self) -> Number:
         value = self.value()
         assert value is not None, "No solution has been set"
-        return float(value)
+        return value
 
     # -------
     # IQuadExpr
@@ -1268,7 +1273,7 @@ class _Model(Model):
         Note: two auxilary binary variables are also created."""
         x_ = self._convert(x)
         name = name or f"abs({x_.compact_repr()})"
-        U = max(0, x_.bound().min, -x_.bound().max)
+        U = max(0, x_.bound().max, -x_.bound().min)
         y = self.add_var(lb=0, ub=U, name=name)
         d = self.add_var(VType.BINARY, name=f"{name}/d")
 
@@ -1276,7 +1281,7 @@ class _Model(Model):
         self.add_constraint(y >= -x_, f"{name}/C1[1]")
 
         self.add_constraint(y <= x_ + self._clip_M(U - x_.bound().min) * ~d, f"{name}/C2[0]")
-        self.add_constraint(y <= -x_ + self._clip_M(U - (-x_).bound().max) * d, f"{name}/C2[1]")
+        self.add_constraint(y <= -x_ + self._clip_M(U - (-x_).bound().min) * d, f"{name}/C2[1]")
 
         return check_type(y, QuadExpr)
 
