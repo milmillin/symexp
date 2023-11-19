@@ -42,11 +42,12 @@ class GurobiSolver(Solver[_ExprT_con]):
         self.model._self = self
         self.model.optimize(_callback)
         status = self.model.getAttr(GRB.Attr.Status)
+        sol_count = self.model.getAttr(GRB.Attr.SolCount)
         if status == GRB.INFEASIBLE or status == GRB.INF_OR_UNBD or status == GRB.UNBOUNDED:
             raise ModelInfeasibleError("Model is infeasible or unbounded")
-        elif status == GRB.TIME_LIMIT:
-            raise TimeoutError("Time limit exceeded")
-        elif self.model.getAttr(GRB.Attr.SolCount) == 0:
+        elif status == GRB.TIME_LIMIT and sol_count == 0:
+            raise TimeoutError("No solution found within the time limit")
+        elif sol_count == 0:
             raise ValueError("No solution found")
 
     def _get_solution(self) -> Solution:
