@@ -9,14 +9,19 @@ _Expr = Any
 
 _ExprT_con = TypeVar("_ExprT_con", LinExpr, QuadExpr, contravariant=True)
 
+
 class ModelInfeasibleError(Exception):
     pass
+
 
 class Solver(ABC, Generic[_ExprT_con]):
     def __init__(self, model: Model[_ExprT_con]):
         self.solution_found = Event[Solution, float]()
-        self._var_name_map: dict[str, str] = {f"V{i}": v.name() for i, v in enumerate(model.get_vars())}
-        inner_vars = [self._add_var(f"V{i}", v.type(), v.bound().min, v.bound().max) for i, v in enumerate(model.get_vars())]
+        self._var_name_imap: dict[str, str] = {f"V{i}": v.name() for i, v in enumerate(model.get_vars())}
+        self._var_name_map: dict[str, str] = {v.name(): f"V{i}" for i, v in enumerate(model.get_vars())}
+        inner_vars = [
+            self._add_var(f"V{i}", v.type(), v.bound().min, v.bound().max) for i, v in enumerate(model.get_vars())
+        ]
         for i, constr in enumerate(model.get_constraint()):
             expr = constr.get_expr()
             op = constr.get_op()
@@ -35,7 +40,19 @@ class Solver(ABC, Generic[_ExprT_con]):
 
     def solve(self) -> Solution:
         self._solve()
-        return {self._var_name_map[k]: v for k, v in self._get_solution().items()}
+        return self._inverse_transform_solution(self._get_solution())
+
+    def _invoke_solution_found(self, solution: Solution, runtime: float):
+        """
+        To be used by solver callbacks
+        """
+        self.solution_found.invoke(self._inverse_transform_solution(solution), runtime)
+
+    def _transform_solution(self, solution: Solution) -> Solution:
+        return {self._var_name_map[k]: v for k, v in solution.items()}
+
+    def _inverse_transform_solution(self, solution: Solution) -> Solution:
+        return {self._var_name_imap[k]: v for k, v in solution.items()}
 
     # Solver needs to implement these functions
 

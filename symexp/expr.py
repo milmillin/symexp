@@ -69,7 +69,7 @@ class Expr(ABC):
         ...
 
     def __float__(self) -> float:
-        return self.get_value()
+        return float(self.get_value())
 
     def __int__(self) -> int:
         res = self.get_value()

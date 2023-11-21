@@ -42,11 +42,12 @@ class GurobiSolver(Solver[_ExprT_con]):
         self.model._self = self
         self.model.optimize(_callback)
         status = self.model.getAttr(GRB.Attr.Status)
+        sol_count = self.model.getAttr(GRB.Attr.SolCount)
         if status == GRB.INFEASIBLE or status == GRB.INF_OR_UNBD or status == GRB.UNBOUNDED:
             raise ModelInfeasibleError("Model is infeasible or unbounded")
-        elif status == GRB.TIME_LIMIT:
-            raise TimeoutError("Time limit exceeded")
-        elif self.model.getAttr(GRB.Attr.SolCount) == 0:
+        elif status == GRB.TIME_LIMIT and sol_count == 0:
+            raise TimeoutError("No solution found within the time limit")
+        elif sol_count == 0:
             raise ValueError("No solution found")
 
     def _get_solution(self) -> Solution:
@@ -60,6 +61,7 @@ class GurobiSolver(Solver[_ExprT_con]):
         self.model.update()
 
         for i, s in enumerate(solution):
+            s = self._transform_solution(s)
             self.model.params.StartNumber = i
 
             for v in self.model.getVars():
@@ -73,7 +75,7 @@ def _callback(model, where):
         xs = model.cbGetSolution(self._vars)
         runtime = model.cbGet(GRB.Callback.RUNTIME)
         sol = {var.VarName: x for var, x in zip(self._vars, xs)}
-        self.solution_found.invoke(sol, runtime)
+        self._invoke_solution_found(sol, runtime)
 
 
 # check if all abstract methods are implemented
