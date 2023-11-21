@@ -16,4 +16,5 @@ from .expr import (
     Bound,
     Model,
     Constr,
+    evaluate
 )

@@ -13,11 +13,13 @@ from typing import (
     Callable,
     ParamSpec,
     Type,
+    Any,
 )
 from dataclasses import dataclass
 import math
 from typeguard import typechecked, check_type
 import functools
+from pydantic import BaseModel
 
 
 class VType(Enum):
@@ -1507,6 +1509,20 @@ def _minmax(arg: Number, *args: Number) -> Bound:
     if len(args) == 0:
         return Bound(arg, arg)
     return Bound(min(arg, *args), max(arg, *args))
+
+
+def evaluate(v: Any):
+    if isinstance(v, Expr):
+        v = v.get_value()
+    elif isinstance(v, list):
+        v = [evaluate(x) for x in v]
+    elif isinstance(v, tuple):
+        v = (evaluate(x) for x in v)
+    elif isinstance(v, dict):
+        v = {k: evaluate(x) for k, x in v.items()}
+    elif isinstance(v, BaseModel):
+        v = v.__class__(**{k: evaluate(x) for k, x in iter(v)})
+    return v
 
 
 if __name__ == "__main__":

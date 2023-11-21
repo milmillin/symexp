@@ -6,4 +6,5 @@ dependencies:
   - pip>=20.3
   - pip:
     - typeguard
+    - pydantic
     - -e .
