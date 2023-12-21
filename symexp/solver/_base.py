@@ -11,14 +11,24 @@ _ExprT_con = TypeVar("_ExprT_con", LinExpr, QuadExpr, contravariant=True)
 
 
 class ModelInfeasibleError(Exception):
-    pass
+    def __init__(self, solver: "Solver", msg: str = ""):
+        super().__init__(msg)
+        self.solver = solver
+
+
+class ModelUnboundedError(Exception):
+    def __init__(self, solver: "Solver", msg: str = ""):
+        super().__init__(msg)
+        self.solver = solver
 
 
 class Solver(ABC, Generic[_ExprT_con]):
     def __init__(self, model: Model[_ExprT_con]):
-        self.solution_found = Event[Solution, float]()
+        self.solution_found = Event["Solver", Solution, float]()
+        self.tick = Event["Solver", float]()
         self._var_name_imap: dict[str, str] = {f"V{i}": v.name() for i, v in enumerate(model.get_vars())}
         self._var_name_map: dict[str, str] = {v.name(): f"V{i}" for i, v in enumerate(model.get_vars())}
+        self._constr_name_imap: dict[str, str] = {}
         inner_vars = [
             self._add_var(f"V{i}", v.type(), v.bound().min, v.bound().max) for i, v in enumerate(model.get_vars())
         ]
@@ -27,6 +37,7 @@ class Solver(ABC, Generic[_ExprT_con]):
             op = constr.get_op()
             inner_expr = _to_inner_expr(expr, inner_vars)
             constr_name = f"C{i}"
+            self._constr_name_imap[constr_name] = constr._name if constr._name is not None else constr_name
             match op:
                 case RelOp.EQ:
                     self._add_constraint(inner_expr == 0, constr_name)
@@ -46,7 +57,10 @@ class Solver(ABC, Generic[_ExprT_con]):
         """
         To be used by solver callbacks
         """
-        self.solution_found.invoke(self._inverse_transform_solution(solution), runtime)
+        self.solution_found.invoke(self, self._inverse_transform_solution(solution), runtime)
+    
+    def _invoke_tick(self, runtime: float):
+        self.tick.invoke(self, runtime)
 
     def _transform_solution(self, solution: Solution) -> Solution:
         return {self._var_name_map[k]: v for k, v in solution.items()}

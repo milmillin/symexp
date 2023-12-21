@@ -5,7 +5,7 @@ import gurobipy as gp
 from gurobipy import GRB  # type: ignore
 
 from ..expr import Model, Sense, Solution, VType, QuadExpr, LinExpr
-from ._base import Solver, _Var, _Expr, _ExprT_con, ModelInfeasibleError
+from ._base import Solver, _Var, _Expr, _ExprT_con, ModelInfeasibleError, ModelUnboundedError
 
 _VTYPE = {VType.BINARY: GRB.BINARY, VType.INTEGER: GRB.INTEGER, VType.CONTINUOUS: GRB.CONTINUOUS}
 _SENSE = {Sense.MAXIMIZE: GRB.MAXIMIZE, Sense.MINIMIZE: GRB.MINIMIZE}
@@ -43,8 +43,13 @@ class GurobiSolver(Solver[_ExprT_con]):
         self.model.optimize(_callback)
         status = self.model.getAttr(GRB.Attr.Status)
         sol_count = self.model.getAttr(GRB.Attr.SolCount)
-        if status == GRB.INFEASIBLE or status == GRB.INF_OR_UNBD or status == GRB.UNBOUNDED:
-            raise ModelInfeasibleError("Model is infeasible or unbounded")
+        if status == GRB.INF_OR_UNBD:
+            self.model.Params.DualReductions = 0
+            self._solve()
+        if status == GRB.INFEASIBLE: 
+            raise ModelInfeasibleError(self)
+        elif status == GRB.UNBOUNDED:
+            raise ModelUnboundedError(self)
         elif status == GRB.TIME_LIMIT and sol_count == 0:
             raise TimeoutError("No solution found within the time limit")
         elif sol_count == 0:
@@ -70,12 +75,16 @@ class GurobiSolver(Solver[_ExprT_con]):
 
 
 def _callback(model, where):
-    self = cast(GurobiSolver, model._self)
     if where == GRB.Callback.MIPSOL:
+        self = cast(GurobiSolver, model._self)
         xs = model.cbGetSolution(self._vars)
         runtime = model.cbGet(GRB.Callback.RUNTIME)
         sol = {var.VarName: x for var, x in zip(self._vars, xs)}
         self._invoke_solution_found(sol, runtime)
+    elif where == GRB.Callback.MESSAGE:
+        self = cast(GurobiSolver, model._self)
+        runtime = model.cbGet(GRB.Callback.RUNTIME)
+        self._invoke_tick(runtime)
 
 
 # check if all abstract methods are implemented
