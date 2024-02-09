@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from typing import (
     Optional,
+    SupportsFloat,
     Union,
     overload,
     TypeVar,
@@ -57,16 +58,13 @@ _INF = float("inf")
 
 class Expr(ABC):
     @abstractmethod
-    def model(self) -> "Model":
-        ...
+    def model(self) -> "Model": ...
 
     @abstractmethod
-    def __repr__(self) -> str:
-        ...
+    def __repr__(self) -> str: ...
 
     @abstractmethod
-    def compact_repr(self) -> str:
-        ...
+    def compact_repr(self) -> str: ...
 
     def __float__(self) -> float:
         return float(self.get_value())
@@ -77,40 +75,33 @@ class Expr(ABC):
         return res
 
     @abstractmethod
-    def _signature(self) -> _Signature:
-        ...
+    def _signature(self) -> _Signature: ...
 
     def __hash__(self):
         return hash(self._signature())
 
     @abstractmethod
-    def bound(self) -> "Bound":
-        ...
+    def bound(self) -> "Bound": ...
 
     @abstractmethod
-    def is_continuous(self) -> bool:
-        ...
+    def is_continuous(self) -> bool: ...
 
     def is_binary(self) -> bool:
         return self.bound() == (0, 1) and not self.is_continuous()
 
     @abstractmethod
-    def get_value(self) -> Number:
-        ...
+    def get_value(self) -> Number: ...
 
 
 class QuadExpr(Expr):
     @abstractmethod
-    def quad_expr(self) -> dict[tuple["Var", "Var"], float]:
-        ...
+    def quad_expr(self) -> dict[tuple["Var", "Var"], float]: ...
 
     @abstractmethod
-    def lin_expr(self) -> dict["Var", float]:
-        ...
+    def lin_expr(self) -> dict["Var", float]: ...
 
     @abstractmethod
-    def const_expr(self) -> Number:
-        ...
+    def const_expr(self) -> Number: ...
 
     # --------------
     # IExpr
@@ -275,12 +266,10 @@ class LinExpr(QuadExpr):
     # Operators
 
     @overload
-    def __add__(self, other: LinExprOrNumber) -> "LinExpr":
-        ...
+    def __add__(self, other: LinExprOrNumber) -> "LinExpr": ...
 
     @overload
-    def __add__(self, other: QuadExpr) -> QuadExpr:
-        ...
+    def __add__(self, other: QuadExpr) -> QuadExpr: ...
 
     @typechecked
     def __add__(self, other: QuadExprOrNumber) -> Union["LinExpr", QuadExpr]:
@@ -299,12 +288,10 @@ class LinExpr(QuadExpr):
             return other + self
 
     @overload
-    def __mul__(self, other: "LinExpr") -> "QuadExpr":
-        ...
+    def __mul__(self, other: "LinExpr") -> "QuadExpr": ...
 
     @overload
-    def __mul__(self, other: Union[float, int]) -> "LinExpr":
-        ...
+    def __mul__(self, other: Union[float, int]) -> "LinExpr": ...
 
     @typechecked
     def __mul__(self, other: Union["LinExpr", float, int]) -> Union["LinExpr", "QuadExpr"]:
@@ -363,14 +350,12 @@ class LinExpr(QuadExpr):
     # Utils
 
     @abstractmethod
-    def to_bin_expr(self) -> "BinExpr":
-        ...
+    def to_bin_expr(self) -> "BinExpr": ...
 
 
 class BinExpr(LinExpr):
     @abstractmethod
-    def __invert__(self) -> "BinExpr":
-        ...
+    def __invert__(self) -> "BinExpr": ...
 
     def to_bin_expr(self) -> "BinExpr":
         return self
@@ -378,24 +363,19 @@ class BinExpr(LinExpr):
 
 class Var(LinExpr):
     @abstractmethod
-    def index(self) -> int:
-        ...
+    def index(self) -> int: ...
 
     @abstractmethod
-    def name(self) -> str:
-        ...
+    def name(self) -> str: ...
 
     @abstractmethod
-    def value(self) -> Optional[float]:
-        ...
+    def value(self) -> Optional[float]: ...
 
     @abstractmethod
-    def set_value(self, value: float) -> None:
-        ...
+    def set_value(self, value: float) -> None: ...
 
     @abstractmethod
-    def type(self) -> VType:
-        ...
+    def type(self) -> VType: ...
 
     def __hash__(self):
         return self.index()
@@ -773,8 +753,7 @@ class Model(ABC, Generic[_ExprT]):
     @abstractmethod
     def add_var(
         self, vtype: VType = VType.CONTINUOUS, ub: float = _INF, lb: float = 0, name: Optional[str] = None
-    ) -> Var:
-        ...
+    ) -> Var: ...
 
     # -------------
     # add_vars
@@ -796,8 +775,7 @@ class Model(ABC, Generic[_ExprT]):
     @abstractmethod
     def add_vars(
         self, n: int, vtype: VType = VType.CONTINUOUS, ub: float = _INF, lb: float = 0, name: Optional[str] = None
-    ) -> Union[list[Var], list[BinVar]]:
-        ...
+    ) -> Union[list[Var], list[BinVar]]: ...
 
     # ----------------
     # Member functions
@@ -805,60 +783,48 @@ class Model(ABC, Generic[_ExprT]):
     @abstractmethod
     def add_constraint(
         self, constr: Union[Constr[_ExprT], bool], name: Optional[str] = None, if_: Optional[BinExprOrLiteral] = None
-    ):
-        ...
+    ): ...
 
     @abstractmethod
-    def set_objective(self, sense: Sense, expr: _ExprT):
-        ...
+    def set_objective(self, sense: Sense, expr: _ExprT): ...
 
     @abstractmethod
-    def set_solution(self, solution: Solution):
-        ...
+    def set_solution(self, solution: Solution): ...
 
     @abstractmethod
-    def check_solution_satisfies_constraints(self, solution: Solution, verbose: bool = False) -> bool:
-        ...
+    def check_solution_satisfies_constraints(self, solution: Solution, verbose: bool = False) -> bool: ...
 
     @abstractmethod
-    def enforce_solution(self, solution: Solution):
-        ...
+    def enforce_solution(self, solution: Solution): ...
 
     # ----------------
     # Getters
 
     @abstractmethod
-    def name(self) -> str:
-        ...
+    def name(self) -> str: ...
 
     @abstractmethod
-    def get_vars(self) -> list[Var]:
-        ...
+    def get_vars(self) -> list[Var]: ...
 
     @abstractmethod
-    def get_constraint(self) -> list[Constr]:
-        ...
+    def get_constraint(self) -> list[Constr]: ...
 
     @abstractmethod
-    def get_objective(self) -> tuple[_ExprT, Sense]:
-        ...
+    def get_objective(self) -> tuple[_ExprT, Sense]: ...
 
     # ----------------
     # Syntactic Sugar
 
     @overload
     @abstractmethod
-    def sum(self, xs: Iterable[Union[LinExpr, Number]]) -> LinExpr:
-        ...
+    def sum(self, xs: Iterable[Union[LinExpr, Number]]) -> LinExpr: ...
 
     @overload
     @abstractmethod
-    def sum(self, xs: Iterable[Union[QuadExpr, Number]]) -> QuadExpr:
-        ...
+    def sum(self, xs: Iterable[Union[QuadExpr, Number]]) -> QuadExpr: ...
 
     @abstractmethod
-    def sum(self, xs: Iterable[Union[LinExpr, QuadExpr, Number]]) -> Union[LinExpr, QuadExpr]:
-        ...
+    def sum(self, xs: Iterable[Union[LinExpr, QuadExpr, Number]]) -> Union[LinExpr, QuadExpr]: ...
 
     @abstractmethod
     def and_(self, *x: BinExprOrLiteral, name: Optional[str] = None) -> BinExpr:
@@ -981,30 +947,24 @@ class Model(ABC, Generic[_ExprT]):
     # Utils
 
     @abstractmethod
-    def __repr__(self) -> str:
-        ...
+    def __repr__(self) -> str: ...
 
     @abstractmethod
-    def _gen_name(self, pref: str = "T") -> str:
-        ...
+    def _gen_name(self, pref: str = "T") -> str: ...
 
     @abstractmethod
-    def _clip_M(self, cand_M: float) -> float:
-        ...
+    def _clip_M(self, cand_M: float) -> float: ...
 
     @overload
     @abstractmethod
-    def _convert(self, expr: Union[LinExpr, Number]) -> LinExpr:
-        ...
+    def _convert(self, expr: Union[LinExpr, Number]) -> LinExpr: ...
 
     @overload
     @abstractmethod
-    def _convert(self, expr: QuadExpr) -> QuadExpr:
-        ...
+    def _convert(self, expr: QuadExpr) -> QuadExpr: ...
 
     @abstractmethod
-    def _convert(self, expr: Union[QuadExpr, LinExpr, Number]) -> Union[QuadExpr, LinExpr]:
-        ...
+    def _convert(self, expr: Union[QuadExpr, LinExpr, Number]) -> Union[QuadExpr, LinExpr]: ...
 
     @abstractmethod
     def _convert_bin(self, x: BinExprOrLiteral) -> BinExpr:
@@ -1015,13 +975,11 @@ class Model(ABC, Generic[_ExprT]):
 
     @overload
     @classmethod
-    def create(cls, name: str, type: Type[LinExpr] = LinExpr, M: float = 1e5) -> "Model[LinExpr]":
-        ...
+    def create(cls, name: str, type: Type[LinExpr] = LinExpr, M: float = 1e5) -> "Model[LinExpr]": ...
 
     @overload
     @classmethod
-    def create(cls, name: str, type: Type[QuadExpr], M: float = 1e5) -> "Model[QuadExpr]":
-        ...
+    def create(cls, name: str, type: Type[QuadExpr], M: float = 1e5) -> "Model[QuadExpr]": ...
 
     @classmethod
     def create(cls, name: str, type: Union[Type[LinExpr], Type[QuadExpr]] = LinExpr, M: float = 1e5) -> "Model":
@@ -1173,12 +1131,10 @@ class _Model(Model):
     # Syntactic Sugar
 
     @overload
-    def sum(self, xs: Iterable[Union[LinExpr, Number]]) -> LinExpr:
-        ...
+    def sum(self, xs: Iterable[Union[LinExpr, Number]]) -> LinExpr: ...
 
     @overload
-    def sum(self, xs: Iterable[Union[QuadExpr, Number]]) -> QuadExpr:
-        ...
+    def sum(self, xs: Iterable[Union[QuadExpr, Number]]) -> QuadExpr: ...
 
     def sum(self, xs: Iterable[Union[LinExpr, QuadExpr, Number]]) -> Union[LinExpr, QuadExpr]:
         return sum((self._convert(x) for x in xs), _LinExpr(self, {}, 0))
@@ -1300,23 +1256,23 @@ class _Model(Model):
         if n is 1, returns expr_0 (no variables created).
         """
         assert len(cond_expr) > 0, "Requires at least one expression."
-        cond_expr = tuple((self._convert_bin(cond), self._convert(expr)) for cond, expr in cond_expr)
+        cond_expr_ = tuple((self._convert_bin(cond), self._convert(expr)) for cond, expr in cond_expr)
         if else_ is not None:
-            cond_expr = cond_expr + (
-                ((1 - self.sum(cond for cond, _ in cond_expr)).to_bin_expr(), self._convert(else_)),
+            cond_expr_ = cond_expr_ + (
+                ((1 - self.sum(cond for cond, _ in cond_expr_)).to_bin_expr(), self._convert(else_)),
             )
-        if len(cond_expr) == 1:
-            return cond_expr[0][1]
+        if len(cond_expr_) == 1:
+            return cond_expr_[0][1]
 
         if name is None:
             name = (
-                "mux(" + ",".join(f"{cond.compact_repr()}->({expr.compact_repr()})" for cond, expr in cond_expr) + ")"
+                "mux(" + ",".join(f"{cond.compact_repr()}->({expr.compact_repr()})" for cond, expr in cond_expr_) + ")"
             )
 
-        L_min = min(x_.bound().min for _, x_ in cond_expr)
-        U_max = max(x_.bound().max for _, x_ in cond_expr)
+        L_min = min(x_.bound().min for _, x_ in cond_expr_)
+        U_max = max(x_.bound().max for _, x_ in cond_expr_)
         y = self.add_var(ub=U_max, lb=L_min, name=name)
-        for i, (cond, expr) in enumerate(cond_expr):
+        for i, (cond, expr) in enumerate(cond_expr_):
             self.add_constraint(y <= expr + self._clip_M(U_max - expr.bound().min) * (1 - cond), f"{name}/C1[{i}]")
             self.add_constraint(y >= expr - self._clip_M(expr.bound().max - L_min) * (1 - cond), f"{name}/C2[{i}]")
         return check_type(y, QuadExpr)
@@ -1334,20 +1290,20 @@ class _Model(Model):
         if n is 1, returns expr_0 (no variables created).
         """
         assert len(cond_expr) > 0, "Requires at least one expression."
-        cond_expr = tuple((self._convert_bin(cond), self._convert_bin(expr)) for cond, expr in cond_expr)
+        cond_expr_ = tuple((self._convert_bin(cond), self._convert_bin(expr)) for cond, expr in cond_expr)
         if else_ is not None:
-            else_cond = ~(self.sum(cond for cond, _ in cond_expr)).to_bin_expr()
-            cond_expr = (*cond_expr, (else_cond, self._convert_bin(else_)))
-        if len(cond_expr) == 1:
-            return cond_expr[0][1]
+            else_cond = ~(self.sum(cond for cond, _ in cond_expr_)).to_bin_expr()
+            cond_expr_ = (*cond_expr_, (else_cond, self._convert_bin(else_)))
+        if len(cond_expr_) == 1:
+            return cond_expr_[0][1]
 
         if name is None:
             name = (
-                "bmux(" + ",".join(f"{cond.compact_repr()}->({expr.compact_repr()})" for cond, expr in cond_expr) + ")"
+                "bmux(" + ",".join(f"{cond.compact_repr()}->({expr.compact_repr()})" for cond, expr in cond_expr_) + ")"
             )
 
         y = self.add_var(VType.BINARY, name=name)
-        for i, (cond, expr) in enumerate(cond_expr):
+        for i, (cond, expr) in enumerate(cond_expr_):
             self.add_constraint(y <= expr + (1 - cond), f"{name}/C1[{i}]")
             self.add_constraint(y >= expr - (1 - cond), f"{name}/C2[{i}]")
         return y
@@ -1383,17 +1339,17 @@ class _Model(Model):
         Returns: (y, argmin).
         If all en_i are false, Model._M is returned.
         """
-        en_x = tuple((self._convert_bin(en), self._convert(x)) for en, x in en_x)
-        n = len(en_x)
+        en_x_ = tuple((self._convert_bin(en), self._convert(x)) for en, x in en_x)
+        n = len(en_x_)
 
         assert n > 0, "Requires at least 1 expression."
         if name is None:
-            name = "min_en(" + ",".join(f"{en.compact_repr()}->({x.compact_repr()})" for en, x in en_x) + ")"
+            name = "min_en(" + ",".join(f"{en.compact_repr()}->({x.compact_repr()})" for en, x in en_x_) + ")"
 
-        L_min = min(x.bound().min for _, x in en_x)
+        L_min = min(x.bound().min for _, x in en_x_)
         y = self.add_var(lb=L_min, name=name)
         d = self.add_vars(n + 1, VType.BINARY, name=f"{name}/d")
-        for i, (en, x) in enumerate(en_x):
+        for i, (en, x) in enumerate(en_x_):
             self.add_constraint(y <= x + self._M * (1 - en), f"{name}/C1[{i}]")
             self.add_constraint(y >= x - self._clip_M(x.bound().max - L_min) * (1 - d[i]), f"{name}/C2[{i}]")
             self.add_constraint(d[i] <= en, f"{name}/C3[{i}]")
@@ -1511,6 +1467,34 @@ def _minmax(arg: Number, *args: Number) -> Bound:
     return Bound(min(arg, *args), max(arg, *args))
 
 
+@overload
+def evaluate(v: list[SupportsFloat]) -> list[float]: ...
+@overload
+def evaluate(v: tuple[SupportsFloat]) -> tuple[float]: ...
+@overload
+def evaluate(v: tuple[SupportsFloat, SupportsFloat]) -> tuple[float, float]: ...
+@overload
+def evaluate(v: tuple[SupportsFloat, SupportsFloat, SupportsFloat]) -> tuple[float, float, float]: ...
+@overload
+def evaluate(
+    v: tuple[SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat]
+) -> tuple[float, float, float, float]: ...
+@overload
+def evaluate(
+    v: tuple[SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat]
+) -> tuple[float, float, float, float, float]: ...
+@overload
+def evaluate(
+    v: tuple[SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat]
+) -> tuple[float, float, float, float, float, float]: ...
+@overload
+def evaluate(v: tuple[SupportsFloat, ...]) -> tuple[float, ...]: ...
+@overload
+def evaluate(v: dict[_T, SupportsFloat]) -> dict[_T, float]: ...
+@overload
+def evaluate(v: SupportsFloat) -> float: ...
+@overload
+def evaluate(v: Any) -> Any: ...
 def evaluate(v: Any):
     if isinstance(v, Expr):
         v = v.get_value()
