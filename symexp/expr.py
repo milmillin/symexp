@@ -1468,45 +1468,73 @@ def _minmax(arg: Number, *args: Number) -> Bound:
 
 
 @overload
-def evaluate(v: list[SupportsFloat]) -> list[float]: ...
+def evaluate(__v1: list[SupportsFloat]) -> list[float]: ...
 @overload
-def evaluate(v: tuple[SupportsFloat]) -> tuple[float]: ...
+def evaluate(__v1: tuple[SupportsFloat]) -> tuple[float]: ...
 @overload
-def evaluate(v: tuple[SupportsFloat, SupportsFloat]) -> tuple[float, float]: ...
+def evaluate(__v1: tuple[SupportsFloat, SupportsFloat]) -> tuple[float, float]: ...
 @overload
-def evaluate(v: tuple[SupportsFloat, SupportsFloat, SupportsFloat]) -> tuple[float, float, float]: ...
+def evaluate(__v1: tuple[SupportsFloat, SupportsFloat, SupportsFloat]) -> tuple[float, float, float]: ...
 @overload
 def evaluate(
-    v: tuple[SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat]
+    __v1: tuple[SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat]
 ) -> tuple[float, float, float, float]: ...
 @overload
 def evaluate(
-    v: tuple[SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat]
+    __v1: tuple[SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat]
 ) -> tuple[float, float, float, float, float]: ...
 @overload
 def evaluate(
-    v: tuple[SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat]
+    __v1: tuple[SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat]
 ) -> tuple[float, float, float, float, float, float]: ...
 @overload
-def evaluate(v: tuple[SupportsFloat, ...]) -> tuple[float, ...]: ...
+def evaluate(__v1: tuple[SupportsFloat, ...]) -> tuple[float, ...]: ...
 @overload
-def evaluate(v: dict[_T, SupportsFloat]) -> dict[_T, float]: ...
+def evaluate(__v1: dict[_T, SupportsFloat]) -> dict[_T, float]: ...
 @overload
-def evaluate(v: SupportsFloat) -> float: ...
+def evaluate(__v1: SupportsFloat) -> float: ...
 @overload
-def evaluate(v: Any) -> Any: ...
-def evaluate(v: Any):
-    if isinstance(v, Expr):
-        v = v.get_value()
-    elif isinstance(v, list):
-        v = [evaluate(x) for x in v]
-    elif isinstance(v, tuple):
-        v = (evaluate(x) for x in v)
-    elif isinstance(v, dict):
-        v = {k: evaluate(x) for k, x in v.items()}
-    elif isinstance(v, BaseModel):
-        v = v.__class__(**{k: evaluate(x) for k, x in iter(v)})
-    return v
+def evaluate(__v1: SupportsFloat, __v2: SupportsFloat) -> tuple[float, float]: ...
+@overload
+def evaluate(__v1: SupportsFloat, __v2: SupportsFloat, __v3: SupportsFloat) -> tuple[float, float, float]: ...
+@overload
+def evaluate(
+    __v1: SupportsFloat, __v2: SupportsFloat, __v3: SupportsFloat, __v4: SupportsFloat
+) -> tuple[float, float, float, float]: ...
+@overload
+def evaluate(
+    __v1: SupportsFloat, __v2: SupportsFloat, __v3: SupportsFloat, __v4: SupportsFloat, __v5: SupportsFloat
+) -> tuple[float, float, float, float, float]: ...
+@overload
+def evaluate(
+    __v1: SupportsFloat,
+    __v2: SupportsFloat,
+    __v3: SupportsFloat,
+    __v4: SupportsFloat,
+    __v5: SupportsFloat,
+    __v6: SupportsFloat,
+) -> tuple[float, float, float, float, float, float]: ...
+@overload
+def evaluate(__v1: Any) -> Any: ...
+@overload
+def evaluate(*vs: Any) -> tuple[Any, ...]: ...
+def evaluate(*vs, **kwargs):
+    if len(vs) == 1:
+        v = vs[0]
+        if isinstance(v, float):
+            return v
+        if isinstance(v, Expr):
+            return v.get_value()
+        if isinstance(v, tuple):
+            return tuple(evaluate(x) for x in v)
+        if isinstance(v, list):
+            return [evaluate(x) for x in v]
+        if isinstance(v, dict):
+            return {k: evaluate(x) for k, x in v.items()}
+        if isinstance(v, BaseModel):
+            return v.__class__(**{k: evaluate(x) for k, x in iter(v)})
+    else:
+        return tuple(evaluate(v) for v in vs)
 
 
 if __name__ == "__main__":
