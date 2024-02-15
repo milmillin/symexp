@@ -678,6 +678,14 @@ class Constr(Generic[_ExprT_co]):
         self._rhs = rhs
         self._op = op
         self._name: Optional[str] = None
+        self._index: Optional[int] = None
+
+    def index(self) -> int:
+        assert self._index is not None, "index is not set"
+        return self._index
+
+    def name(self) -> str:
+        return self._name or f"C{self.index()}"
 
     def get_expr(self) -> _ExprT_co:
         return self._lhs - self._rhs
@@ -807,7 +815,7 @@ class Model(ABC, Generic[_ExprT]):
     def get_vars(self) -> list[Var]: ...
 
     @abstractmethod
-    def get_constraint(self) -> list[Constr]: ...
+    def get_constraints(self) -> list[Constr]: ...
 
     @abstractmethod
     def get_objective(self) -> tuple[_ExprT, Sense]: ...
@@ -1068,13 +1076,16 @@ class _Model(Model):
             if constr._op == RelOp.EQ or constr._op == RelOp.GE:
                 constr_ge = constr._lhs >= constr._rhs - self._clip_M(-expr.bound().min) * (1 - if_)
                 constr_ge._name = f"{name}/ge"
+                constr_ge._index = len(self._constrs)
                 self._constrs.append(constr_ge)
             if constr._op == RelOp.EQ or constr._op == RelOp.LE:
                 constr_le = constr._lhs <= constr._rhs + self._clip_M(expr.bound().max) * (1 - if_)
+                constr_le._index = len(self._constrs)
                 constr_le._name = f"{name}/le"
                 self._constrs.append(constr_le)
         elif if_ is None or if_ == 1:
             constr._name = name
+            constr._index = len(self._constrs)
             self._constrs.append(constr)
 
     def set_objective(self, sense: Sense, expr: QuadExpr):
@@ -1120,7 +1131,7 @@ class _Model(Model):
     def get_vars(self) -> list[Var]:
         return [*self._vars]
 
-    def get_constraint(self) -> list[Constr]:
+    def get_constraints(self) -> list[Constr]:
         return [*self._constrs]
 
     def get_objective(self) -> tuple[QuadExpr, Sense]:
