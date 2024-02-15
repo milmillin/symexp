@@ -8,18 +8,6 @@ from ..event import Event
 _ExprT_con = TypeVar("_ExprT_con", LinExpr, QuadExpr, contravariant=True)
 
 
-class ModelInfeasibleError(Exception):
-    def __init__(self, solver: "Solver", msg: str = ""):
-        super().__init__(msg)
-        self.solver = solver
-
-
-class ModelUnboundedError(Exception):
-    def __init__(self, solver: "Solver", msg: str = ""):
-        super().__init__(msg)
-        self.solver = solver
-
-
 class Solver(ABC, Generic[_ExprT_con]):
     def __init__(self, model: Model[_ExprT_con]):
         self.solution_found = Event["Solver", Solution, float]()
@@ -43,3 +31,21 @@ class Solver(ABC, Generic[_ExprT_con]):
 
     @abstractmethod
     def set_solutions(self, *solution: Solution) -> None: ...
+
+
+class SolverError(Exception):
+    def __init__(self, solver: Solver, msg: str = ""):
+        super().__init__(msg)
+        self.solver = solver
+
+
+class ModelInfeasibleError(SolverError):
+    pass
+
+
+class ModelUnboundedError(SolverError):
+    pass
+
+
+class SolverTimeoutError(SolverError):
+    pass

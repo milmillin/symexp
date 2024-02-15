@@ -9,5 +9,5 @@ setup(
     author_email="milink@cs.washington.edu",
     license="MIT",
     packages=["symexp"],
-    install_requires=["typeguard", "pydantic", "gurobipy"],
+    install_requires=["typeguard", "pydantic", "gurobipy", "scipy"],
 )

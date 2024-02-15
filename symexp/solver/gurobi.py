@@ -5,7 +5,7 @@ import gurobipy as gp
 from gurobipy import GRB  # type: ignore
 
 from ..expr import Model, RelOp, Sense, Solution, VType, QuadExpr, LinExpr
-from ._base import Solver, _ExprT_con, ModelInfeasibleError, ModelUnboundedError
+from ._base import Solver, _ExprT_con, SolverError, ModelInfeasibleError, ModelUnboundedError, SolverTimeoutError
 
 _VTYPE = {VType.BINARY: GRB.BINARY, VType.INTEGER: GRB.INTEGER, VType.CONTINUOUS: GRB.CONTINUOUS}
 _SENSE = {Sense.MAXIMIZE: GRB.MAXIMIZE, Sense.MINIMIZE: GRB.MINIMIZE}
@@ -75,9 +75,9 @@ class GurobiSolver(Solver[_ExprT_con]):
         elif status == GRB.UNBOUNDED:
             raise ModelUnboundedError(self)
         elif status == GRB.TIME_LIMIT and sol_count == 0:
-            raise TimeoutError("No solution found within the time limit")
+            raise SolverTimeoutError(self, "No solution found within the time limit")
         elif sol_count == 0:
-            raise ValueError("No solution found")
+            raise SolverError(self, "No solution found")
 
     def _get_solution(self) -> Solution:
         res = {}
