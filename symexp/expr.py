@@ -820,6 +820,9 @@ class Model(ABC, Generic[_ExprT]):
     @abstractmethod
     def get_objective(self) -> tuple[_ExprT, Sense]: ...
 
+    @abstractmethod
+    def feasible(self) -> bool: ...
+
     # ----------------
     # Syntactic Sugar
 
@@ -1002,6 +1005,7 @@ class _Model(Model):
         self._constrs: list[Constr[QuadExpr]] = []
         self._obj: Optional[QuadExpr] = None
         self._obj_sense: Optional[Sense] = None
+        self._feasible: bool = True
 
         self._tmp_count = 0
         self._var_dict: dict[str, Var] = {}
@@ -1065,7 +1069,9 @@ class _Model(Model):
     ):
         if isinstance(constr, bool):
             if if_ is None or if_ == 1:
-                assert constr, "Constraint is always false"
+                if not constr:
+                    self._feasible = False
+                    # assert False, "Constraint is always false"
             return  # if_ false
         assert isinstance(constr.get_expr(), self._type), "Unsupported constraints"
 
@@ -1137,6 +1143,9 @@ class _Model(Model):
     def get_objective(self) -> tuple[QuadExpr, Sense]:
         assert self._obj is not None and self._obj_sense is not None, "No objective set"
         return check_type(self._obj, QuadExpr), self._obj_sense
+
+    def feasible(self) -> bool:
+        return self._feasible
 
     # ----------------
     # Syntactic Sugar

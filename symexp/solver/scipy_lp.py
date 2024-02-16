@@ -1,5 +1,5 @@
 from scipy.optimize import linprog
-from scipy.sparse import csr_array
+from scipy.sparse import lil_array
 import numpy as np
 
 from ..expr import Model, RelOp, Sense, Solution, VType, QuadExpr, LinExpr
@@ -86,8 +86,8 @@ def _create_vector(size: int, data: list[tuple[int, float]]) -> np.ndarray:
     return res
 
 
-def _create_matrix(m: int, data: list[list[tuple[int, float]]]) -> csr_array:
-    res = csr_array((len(data), m))
+def _create_matrix(m: int, data: list[list[tuple[int, float]]]) -> lil_array:
+    res = lil_array((len(data), m))
     for i, terms in enumerate(data):
         for var, coeff in terms:
             res[i, var] = coeff

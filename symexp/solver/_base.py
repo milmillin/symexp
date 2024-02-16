@@ -15,6 +15,8 @@ class Solver(ABC, Generic[_ExprT_con]):
         self._og_model = model
 
     def solve(self) -> Solution:
+        if not self._og_model.feasible():
+            raise ModelInfeasibleError(self, before_solve=True)
         self._solve()
         return self._get_solution()
 
@@ -40,7 +42,10 @@ class SolverError(Exception):
 
 
 class ModelInfeasibleError(SolverError):
-    pass
+    def __init__(self, solver: Solver, msg: str = "", before_solve: bool = False):
+        super().__init__(solver, msg)
+        self.solver = solver
+        self.before_solve = before_solve
 
 
 class ModelUnboundedError(SolverError):
