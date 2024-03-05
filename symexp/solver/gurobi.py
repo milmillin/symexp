@@ -5,13 +5,23 @@ import gurobipy as gp
 from gurobipy import GRB  # type: ignore
 
 from ..expr import Model, RelOp, Sense, Solution, VType, QuadExpr, LinExpr
-from ._base import Solver, _ExprT_con, SolverError, ModelInfeasibleError, ModelUnboundedError, SolverTimeoutError
+from ._base import (
+    Solver,
+    _ExprT_con,
+    SolverError,
+    ModelInfeasibleError,
+    ModelUnboundedError,
+    SolverTimeoutError,
+    SolverInfo,
+)
 
 _VTYPE = {VType.BINARY: GRB.BINARY, VType.INTEGER: GRB.INTEGER, VType.CONTINUOUS: GRB.CONTINUOUS}
 _SENSE = {Sense.MAXIMIZE: GRB.MAXIMIZE, Sense.MINIMIZE: GRB.MINIMIZE}
 
 _Var = Any
 _Expr = Any
+
+_INF = float("inf")
 
 
 class GurobiSolver(Solver[_ExprT_con]):
@@ -20,7 +30,7 @@ class GurobiSolver(Solver[_ExprT_con]):
         model: Model[_ExprT_con],
         num_threads: int = multiprocessing.cpu_count(),
         non_convex: bool = False,
-        time_limit: float = float("inf"),
+        time_limit: float = _INF,
         **kwargs,
     ):
         super().__init__(model)
@@ -64,6 +74,8 @@ class GurobiSolver(Solver[_ExprT_con]):
 
     def _solve(self):
         self.model._self = self
+        self.model._objbnd = float("-inf")
+        self.model._sense = self._og_model.get_objective()[1].value
         self.model.optimize(_callback)
         status = self.model.getAttr(GRB.Attr.Status)
         sol_count = self.model.getAttr(GRB.Attr.SolCount)
@@ -104,11 +116,25 @@ def _callback(model, where):
         xs = model.cbGetSolution(self._vars)
         runtime = model.cbGet(GRB.Callback.RUNTIME)
         sol = {self._var_names[int(var.VarName[1:])]: x for var, x in zip(self._vars, xs)}
-        self.solution_found.invoke(self, sol, runtime)
+        obj = model.cbGet(GRB.Callback.MIPSOL_OBJBST)
+        bnd = model.cbGet(GRB.Callback.MIPSOL_OBJBND)
+        if obj == 1e100:
+            obj = _INF
+        self.solution_found.invoke(self, sol, SolverInfo(runtime, obj, bnd))
     elif where == GRB.Callback.MESSAGE:
         self = cast(GurobiSolver, model._self)
         runtime = model.cbGet(GRB.Callback.RUNTIME)
-        self._invoke_tick(runtime)
+        self.tick.invoke(self, runtime)
+    elif where == GRB.Callback.MIP:
+        self = cast(GurobiSolver, model._self)
+        bnd = model.cbGet(GRB.Callback.MIP_OBJBND) * model._sense
+        if bnd > model._objbnd:
+            model._objbnd = bnd
+            runtime = model.cbGet(GRB.Callback.RUNTIME)
+            obj = model.cbGet(GRB.Callback.MIP_OBJBST)
+            if obj == 1e100:
+                obj = _INF
+            self.bound_found.invoke(self, SolverInfo(runtime, obj, bnd * model._sense))
 
 
 # check if all abstract methods are implemented

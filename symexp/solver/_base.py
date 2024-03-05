@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Optional, Sequence, TypeVar, Generic
+from typing import Any, Optional, Sequence, TypeVar, Generic, NamedTuple
 
 from ..expr import Model, VType, Sense, RelOp, Solution, LinExpr, QuadExpr
 from ..event import Event
@@ -8,10 +8,17 @@ from ..event import Event
 _ExprT_con = TypeVar("_ExprT_con", LinExpr, QuadExpr, contravariant=True)
 
 
+class SolverInfo(NamedTuple):
+    runtime: float
+    best_obj: float
+    obj_bound: float
+
+
 class Solver(ABC, Generic[_ExprT_con]):
     def __init__(self, model: Model[_ExprT_con]):
-        self.solution_found = Event["Solver", Solution, float]()
-        self.tick = Event["Solver", float]()
+        self.solution_found = Event["Solver", Solution, SolverInfo]()  # solver, sol, runtime
+        self.tick = Event["Solver", float]()  # solver, runtime
+        self.bound_found = Event["Solver", SolverInfo]()  # solver, bound, runtime
         self._og_model = model
 
     def solve(self) -> Solution:
@@ -19,9 +26,6 @@ class Solver(ABC, Generic[_ExprT_con]):
             raise ModelInfeasibleError(self, before_solve=True)
         self._solve()
         return self._get_solution()
-
-    def _invoke_tick(self, runtime: float):
-        self.tick.invoke(self, runtime)
 
     # Solver needs to implement these functions
 
