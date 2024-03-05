@@ -1541,7 +1541,7 @@ def evaluate(*vs: Any) -> tuple[Any, ...]: ...
 def evaluate(*vs, **kwargs):
     if len(vs) == 1:
         v = vs[0]
-        if isinstance(v, float):
+        if isinstance(v, (float, int)):
             return v
         if isinstance(v, Expr):
             return v.get_value()
@@ -1553,6 +1553,7 @@ def evaluate(*vs, **kwargs):
             return {k: evaluate(x) for k, x in v.items()}
         if isinstance(v, BaseModel):
             return v.__class__(**{k: evaluate(x) for k, x in iter(v)})
+        return v
     else:
         return tuple(evaluate(v) for v in vs)
 
