@@ -791,7 +791,10 @@ class Model(ABC, Generic[_ExprT]):
     @abstractmethod
     def add_constraint(
         self, constr: Union[Constr[_ExprT], bool], name: Optional[str] = None, if_: Optional[BinExprOrLiteral] = None
-    ): ...
+    ) -> int: ...
+
+    @abstractmethod
+    def pop_constraints(self, num: int = 1): ...
 
     @abstractmethod
     def set_objective(self, sense: Sense, expr: _ExprT): ...
@@ -1066,17 +1069,18 @@ class _Model(Model):
 
     def add_constraint(
         self, constr: Union[Constr[QuadExpr], bool], name: Optional[str] = None, if_: Optional[BinExprOrLiteral] = None
-    ):
+    ) -> int:
         if isinstance(constr, bool):
             if if_ is None or if_ == 1:
                 if not constr:
                     self._feasible = False
                     # assert False, "Constraint is always false"
-            return  # if_ false
+            return 0  # if_ false
         assert isinstance(constr.get_expr(), self._type), "Unsupported constraints"
 
         name = name or self._gen_name("C")
 
+        cnt = 0
         if isinstance(if_, BinExpr):
             expr = constr._lhs - constr._rhs
             if constr._op == RelOp.EQ or constr._op == RelOp.GE:
@@ -1084,15 +1088,23 @@ class _Model(Model):
                 constr_ge._name = f"{name}/ge"
                 constr_ge._index = len(self._constrs)
                 self._constrs.append(constr_ge)
+                cnt += 1
             if constr._op == RelOp.EQ or constr._op == RelOp.LE:
                 constr_le = constr._lhs <= constr._rhs + self._clip_M(expr.bound().max) * (1 - if_)
                 constr_le._index = len(self._constrs)
                 constr_le._name = f"{name}/le"
                 self._constrs.append(constr_le)
+                cnt += 1
         elif if_ is None or if_ == 1:
             constr._name = name
             constr._index = len(self._constrs)
             self._constrs.append(constr)
+            cnt += 1
+        return cnt
+
+    def pop_constraints(self, num: int = 1):
+        for _ in range(num):
+            self._constrs.pop()
 
     def set_objective(self, sense: Sense, expr: QuadExpr):
         assert isinstance(expr, self._type), "Unsupported expression"
