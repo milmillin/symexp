@@ -92,10 +92,7 @@ class GurobiSolver(Solver[_ExprT_con]):
             raise SolverError(self, "No solution found")
 
     def _get_solution(self) -> Solution:
-        res = {}
-        for v in self.model.getVars():
-            res[v.VarName] = v.X
-        return res
+        return {self._var_names[int(v.VarName[1:])]: v.X for v in self.model.getVars()}
 
     def set_solutions(self, *solution: Solution) -> None:
         self.model.NumStart = len(solution)
