@@ -723,11 +723,11 @@ class Constr(Generic[_ExprT_co]):
         rhs = float(self._rhs)
         match self._op:
             case RelOp.EQ:
-                return abs(lhs - rhs) < 1e-7
+                return abs(lhs - rhs) < 1e-4
             case RelOp.LE:
-                return lhs <= rhs + 1e-7
+                return lhs <= rhs + 1e-4
             case RelOp.GE:
-                return lhs >= rhs - 1e-7
+                return lhs >= rhs - 1e-4
 
     def __repr__(self):
         return f"{self._name}:\t{self._lhs} {self._op.value} {self._rhs}"
@@ -833,7 +833,9 @@ class Model(ABC, Generic[_ExprT]):
     def set_solution(self, solution: Solution): ...
 
     @abstractmethod
-    def check_solution_satisfies_constraints(self, solution: Solution, verbose: bool = False) -> bool: ...
+    def check_solution_satisfies_constraints(
+        self, solution: Optional[Solution] = None, verbose: bool = False, throw: bool = False
+    ) -> bool: ...
 
     @abstractmethod
     def enforce_solution(self, solution: Solution): ...
@@ -1159,20 +1161,28 @@ class _Model(Model):
         for k, v in solution.items():
             self._var_dict[k].set_value(v)
 
-    def check_solution_satisfies_constraints(self, solution: Solution, verbose: bool = False) -> bool:
-        self.set_solution(solution)
+    def check_solution_satisfies_constraints(
+        self, solution: Optional[Solution] = None, verbose: bool = False, throw: bool = False
+    ) -> bool:
+        if solution is not None:
+            self.set_solution(solution)
         all_res = True
+        failed = []
         for constr in self._constrs:
             try:
                 res = constr.satisfied()
                 all_res = all_res and res
+                if not res:
+                    failed.append(constr)
                 if verbose:
                     print(
                         f"[{'OK' if res else 'FAILED'}]: {constr} ({float(constr._lhs)} {constr._op.value} {float(constr._rhs)})"
                     )
-            except AssertionError as e:
+            except VariableUnsetException as e:
                 if verbose:
                     print(f"[SKIPPED]: {constr}")
+        if len(failed) > 0 and throw:
+            raise ValueError("Following constraints failed:\n" + "\n".join(map(str, failed)))
         return all_res
 
     def enforce_solution(self, solution: Solution):
@@ -1737,6 +1747,12 @@ def evaluate(*vs, **kwargs):
         return v
     else:
         return tuple(evaluate(v) for v in vs)
+
+
+def evaluate_constr(c: Union[Constr, bool]) -> bool:
+    if isinstance(c, bool):
+        return c
+    return c.satisfied()
 
 
 if __name__ == "__main__":
