@@ -43,6 +43,7 @@ class GurobiSolver(Solver[_ExprT_con]):
         inner_vars = [self._add_var(f"V{v.index()}", v.type(), v.bound().min, v.bound().max) for v in model.get_vars()]
         self._var_names = [v.name() for v in model.get_vars()]
         self._var_name_map = {f"V{v.index()}": v.name() for v in model.get_vars()}
+        self._var_name_imap = {v.name(): f"V{v.index()}" for v in model.get_vars()}
         self._constr_names = [c.name() for c in model.get_constraints()]
         for i, constr in enumerate(model.get_constraints()):
             assert i == constr.index()
@@ -99,7 +100,7 @@ class GurobiSolver(Solver[_ExprT_con]):
         self.model.update()
 
         for i, s in enumerate(solution):
-            s = {self._var_name_map[k]: v for k, v in s.items()}
+            s = {self._var_name_imap[k]: v for k, v in s.items()}
             self.model.params.StartNumber = i
 
             for v in self.model.getVars():

@@ -50,6 +50,7 @@ LinExprOrNumber = Union["LinExpr", float, int]
 BinExprOrLiteral = Union["BinExpr", Literal[0, 1]]
 
 _Signature = tuple[tuple[tuple[int, int, float], ...], tuple[tuple[int, float], ...], float]
+VarEvalF = Callable[[], Union[float, int]]
 
 
 _EPS = 1e-63
@@ -361,6 +362,11 @@ class BinExpr(LinExpr):
         return self
 
 
+class VariableUnsetException(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+
+
 class Var(LinExpr):
     @abstractmethod
     def index(self) -> int: ...
@@ -369,10 +375,13 @@ class Var(LinExpr):
     def name(self) -> str: ...
 
     @abstractmethod
-    def value(self) -> Optional[float]: ...
+    def value(self) -> Optional[Number]: ...
 
     @abstractmethod
-    def set_value(self, value: float) -> None: ...
+    def set_value(self, value: Number) -> None: ...
+
+    @abstractmethod
+    def set_evalf(self, evalf: Optional[VarEvalF]) -> None: ...
 
     @abstractmethod
     def type(self) -> VType: ...
@@ -381,8 +390,12 @@ class Var(LinExpr):
         return self.index()
 
     def __repr__(self) -> str:
-        if self.value() is not None:
-            return f"<{self.name()}={self.value()}>"
+        val = self.value()
+        if val is not None:
+            if isinstance(val, int):
+                return f"<{self.name()}={val}>"
+            else:
+                return f"<{self.name()}={val:.2f}>"
         return f"<{self.name()}>"
 
     def compact_repr(self) -> str:
@@ -390,7 +403,8 @@ class Var(LinExpr):
 
     def get_value(self) -> Number:
         value = self.value()
-        assert value is not None, "No solution has been set"
+        if value is None:
+            raise VariableUnsetException(f"Variable {self.name()} has no set value.")
         return value
 
     # -------
@@ -514,13 +528,7 @@ class _LinExpr(LinExpr):
 
 class _TypVar(Var):
     def __init__(
-        self,
-        model: "Model",
-        idx: int,
-        name: str,
-        lb: float,
-        ub: float,
-        vtype: VType,
+        self, model: "Model", idx: int, name: str, lb: float, ub: float, vtype: VType, evalf: Optional[VarEvalF] = None
     ):
         assert lb <= ub, "Lower bound has to be less than or equal to upper bound"
         assert vtype != VType.BINARY, "Create BinVar instead"
@@ -531,6 +539,7 @@ class _TypVar(Var):
         self._ub = ub
         self._vtype = vtype
         self._value: Optional[float] = None
+        self._evalf: Optional[VarEvalF] = evalf
 
     # ------
     # IVar
@@ -550,13 +559,23 @@ class _TypVar(Var):
     def type(self) -> VType:
         return self._vtype
 
-    def value(self) -> Optional[float]:
-        return self._value
+    def value(self) -> Optional[Number]:
+        if self._value is not None:
+            return self._value
+        elif self._evalf is not None:
+            try:
+                return self._evalf()
+            except VariableUnsetException:
+                return None
+        return None
 
-    def set_value(self, value: float) -> None:
+    def set_value(self, value: Number) -> None:
         if self.type() == VType.INTEGER or self.type() == VType.BINARY:
             value = round(value)
         self._value = value
+
+    def set_evalf(self, evalf: Optional[VarEvalF]) -> None:
+        self._evalf = evalf
 
     def is_continuous(self) -> bool:
         return self._vtype == VType.CONTINUOUS
@@ -566,16 +585,12 @@ class _TypVar(Var):
 
 
 class _BinVar(BinVar):
-    def __init__(
-        self,
-        model: "Model",
-        idx: int,
-        name: str,
-    ):
+    def __init__(self, model: "Model", idx: int, name: str, evalf: Optional[VarEvalF] = None):
         self._model = model
         self._idx = idx
         self._name = name
         self._value: Optional[float] = None
+        self._evalf: Optional[VarEvalF] = evalf
 
     # ------
     # IVar
@@ -595,13 +610,23 @@ class _BinVar(BinVar):
     def type(self) -> VType:
         return VType.BINARY
 
-    def value(self) -> Optional[float]:
-        return self._value
+    def value(self) -> Optional[Number]:
+        if self._value is not None:
+            return self._value
+        elif self._evalf is not None:
+            try:
+                return self._evalf()
+            except VariableUnsetException:
+                return None
+        return None
 
-    def set_value(self, value: float) -> None:
+    def set_value(self, value: Number) -> None:
         value = round(value)
         assert value == 1 or value == 0, f"Invalid value. Got {value}"
         self._value = value
+
+    def set_evalf(self, evalf: Optional[VarEvalF]) -> None:
+        self._evalf = evalf
 
     def is_continuous(self) -> bool:
         return False
@@ -747,20 +772,25 @@ class Model(ABC, Generic[_ExprT]):
     # fmt: off
     @overload
     @abstractmethod
-    def add_var(self, vtype: Literal[VType.BINARY], ub: float = 1, lb: float = 0, name: Optional[str] = None) -> BinVar: ...
+    def add_var(self, vtype: Literal[VType.BINARY], ub: float = 1, lb: float = 0, name: Optional[str] = None, evalf: Optional[VarEvalF] = None) -> BinVar: ...
     @overload
     @abstractmethod
-    def add_var(self, vtype: Literal[VType.INTEGER], ub: Literal[1], lb: Literal[0] = 0, name: Optional[str] = None) -> BinVar: ...
+    def add_var(self, vtype: Literal[VType.INTEGER], ub: Literal[1], lb: Literal[0] = 0, name: Optional[str] = None, evalf: Optional[VarEvalF] = None) -> BinVar: ...
     @overload
     @abstractmethod
-    def add_var(self, vtype: Literal[VType.INTEGER], ub: float = _INF, lb: float = 0, name: Optional[str] = None) -> Var: ...
+    def add_var(self, vtype: Literal[VType.INTEGER], ub: float = _INF, lb: float = 0, name: Optional[str] = None, evalf: Optional[VarEvalF] = None) -> Var: ...
     @overload
     @abstractmethod
-    def add_var(self, vtype: VType = VType.CONTINUOUS, ub: float = _INF, lb: float = 0, name: Optional[str] = None) -> Var: ...
+    def add_var(self, vtype: VType = VType.CONTINUOUS, ub: float = _INF, lb: float = 0, name: Optional[str] = None, evalf: Optional[VarEvalF] = None) -> Var: ...
     # fmt: on
     @abstractmethod
     def add_var(
-        self, vtype: VType = VType.CONTINUOUS, ub: float = _INF, lb: float = 0, name: Optional[str] = None
+        self,
+        vtype: VType = VType.CONTINUOUS,
+        ub: float = _INF,
+        lb: float = 0,
+        name: Optional[str] = None,
+        evalf: Optional[VarEvalF] = None,
     ) -> Var: ...
 
     # -------------
@@ -989,19 +1019,25 @@ class Model(ABC, Generic[_ExprT]):
 
     @overload
     @classmethod
-    def create(cls, name: str, type: Type[LinExpr] = LinExpr, M: float = 1e5) -> "Model[LinExpr]": ...
+    def create(
+        cls, name: str, type: Type[LinExpr] = LinExpr, M: float = 1e5, create_evalf: bool = False
+    ) -> "Model[LinExpr]": ...
 
     @overload
     @classmethod
-    def create(cls, name: str, type: Type[QuadExpr], M: float = 1e5) -> "Model[QuadExpr]": ...
+    def create(
+        cls, name: str, type: Type[QuadExpr], M: float = 1e5, create_evalf: bool = False
+    ) -> "Model[QuadExpr]": ...
 
     @classmethod
-    def create(cls, name: str, type: Union[Type[LinExpr], Type[QuadExpr]] = LinExpr, M: float = 1e5) -> "Model":
-        return _Model(type, name, M)
+    def create(
+        cls, name: str, type: Union[Type[LinExpr], Type[QuadExpr]] = LinExpr, M: float = 1e5, create_evalf: bool = False
+    ) -> "Model":
+        return _Model(type, name, M, create_evalf)
 
 
 class _Model(Model):
-    def __init__(self, type: Union[Type[LinExpr], Type[QuadExpr]], name: str, M: float):
+    def __init__(self, type: Union[Type[LinExpr], Type[QuadExpr]], name: str, M: float, create_evalf: bool):
         self._type = type
         self._name = name
         self._vars: list[Var] = []
@@ -1009,6 +1045,7 @@ class _Model(Model):
         self._obj: Optional[QuadExpr] = None
         self._obj_sense: Optional[Sense] = None
         self._feasible: bool = True
+        self._create_evalf: bool = create_evalf
 
         self._tmp_count = 0
         self._var_dict: dict[str, Var] = {}
@@ -1021,16 +1058,21 @@ class _Model(Model):
 
     # fmt: off
     @overload
-    def add_var(self, vtype: Literal[VType.BINARY], ub: float = 1, lb: float = 0, name: Optional[str] = None) -> BinVar: ...
+    def add_var(self, vtype: Literal[VType.BINARY], ub: float = 1, lb: float = 0, name: Optional[str] = None, evalf: Optional[VarEvalF] = None) -> BinVar: ...
     @overload
-    def add_var(self, vtype: Literal[VType.INTEGER], ub: Literal[1], lb: Literal[0] = 0, name: Optional[str] = None) -> BinVar: ...
+    def add_var(self, vtype: Literal[VType.INTEGER], ub: Literal[1], lb: Literal[0] = 0, name: Optional[str] = None, evalf: Optional[VarEvalF] = None) -> BinVar: ...
     @overload
-    def add_var(self, vtype: Literal[VType.INTEGER], ub: float = _INF, lb: float = 0, name: Optional[str] = None) -> Var: ...
+    def add_var(self, vtype: Literal[VType.INTEGER], ub: float = _INF, lb: float = 0, name: Optional[str] = None, evalf: Optional[VarEvalF] = None) -> Var: ...
     @overload
-    def add_var(self, vtype: VType = VType.CONTINUOUS, ub: float = _INF, lb: float = 0, name: Optional[str] = None) -> Var: ...
+    def add_var(self, vtype: VType = VType.CONTINUOUS, ub: float = _INF, lb: float = 0, name: Optional[str] = None, evalf: Optional[VarEvalF] = None) -> Var: ...
     # fmt: on
     def add_var(
-        self, vtype: VType = VType.CONTINUOUS, ub: float = _INF, lb: float = 0, name: Optional[str] = None
+        self,
+        vtype: VType = VType.CONTINUOUS,
+        ub: float = _INF,
+        lb: float = 0,
+        name: Optional[str] = None,
+        evalf: Optional[VarEvalF] = None,
     ) -> Var:
         name = name or self._gen_name()
         assert name not in self._var_dict, f"Variable with name `{name}` already exists"
@@ -1038,9 +1080,9 @@ class _Model(Model):
 
         idx = len(self._vars)
         if vtype == VType.BINARY or (vtype == VType.INTEGER and lb == 0 and ub == 1):
-            res = _BinVar(self, idx, name)
+            res = _BinVar(self, idx, name, evalf=evalf)
         else:
-            res = _TypVar(self, idx, name, lb, ub, vtype)
+            res = _TypVar(self, idx, name, lb, ub, vtype, evalf=evalf)
         self._vars.append(res)
         self._var_dict[res._name] = res
         return res
@@ -1186,6 +1228,16 @@ class _Model(Model):
         for i, var in enumerate(x):
             self.add_constraint(d <= var, f"{name}/C1[{i}]")
         self.add_constraint(d >= self.sum(self._convert_bin(x_) for x_ in x) - (len(x) - 1), f"{name}/C2")
+
+        if self._create_evalf:
+
+            def _evalf() -> float:
+                xv = [round(float(_x)) for _x in x]
+                mn = min(xv)
+                mx = max(xv)
+                return int(mn == 1 and mx == 1)
+
+            d.set_evalf(_evalf)
         return d
 
     @_cache
@@ -1203,6 +1255,13 @@ class _Model(Model):
         for i, var in enumerate(x):
             self.add_constraint(d >= var, f"{name}/C1[{i}]")
         self.add_constraint(d <= self.sum(self._convert_bin(x_) for x_ in x), f"{name}/C2")
+        if self._create_evalf:
+
+            def _evalf() -> float:
+                xv = [round(float(_x)) for _x in x]
+                return max(xv)
+
+            d.set_evalf(_evalf)
         return d
 
     @_cache
@@ -1229,6 +1288,29 @@ class _Model(Model):
             self.add_constraint(y <= x_, f"{name}/C1[{i}]")
             self.add_constraint(y >= x_ - self._clip_M(x_.bound().max - L_min) * (1 - d[i]), f"{name}/C2[{i}]")
         self.add_constraint(self.sum(d) == 1, f"{name}/C3")
+
+        if self._create_evalf:
+
+            def _minf() -> float:
+                return min(float(x_) for x_ in xs)
+
+            y.set_evalf(_minf)
+
+            for i in range(n):
+
+                def _argminf(_i=i) -> float:
+                    xv = [float(x_) for x_ in xs]
+                    mn = float("inf")
+                    mnid = -1
+                    for __i, x_ in enumerate(xv):
+                        if x_ < mn:
+                            mn = x_
+                            mnid = __i
+                    assert mnid != -1
+                    return mnid == _i
+
+                d[i].set_evalf(_argminf)
+
         return check_type(_MinMaxResult(y, d), _MinMaxResult[QuadExpr])
 
     @_cache
@@ -1255,6 +1337,29 @@ class _Model(Model):
             self.add_constraint(y >= x_, f"{name}/C1[{i}]")
             self.add_constraint(y <= x_ + self._clip_M(U_max - x_.bound().min) * (1 - d[i]), f"{name}/C2[{i}]")
         self.add_constraint(self.sum(d) == 1, f"{name}/C3")
+
+        if self._create_evalf:
+
+            def _maxf() -> float:
+                return max(float(x_) for x_ in xs)
+
+            y.set_evalf(_maxf)
+
+            for i in range(n):
+
+                def _argmaxf(_i=i) -> float:
+                    xv = [float(x_) for x_ in xs]
+                    mx = float("-inf")
+                    mxid = -1
+                    for __i, x_ in enumerate(xv):
+                        if x_ > mx:
+                            mx = x_
+                            mxid = __i
+                    assert mxid != -1
+                    return mxid == _i
+
+                d[i].set_evalf(_argmaxf)
+
         return check_type(_MinMaxResult(y, d), _MinMaxResult[QuadExpr])
 
     @_cache
@@ -1272,6 +1377,18 @@ class _Model(Model):
 
         self.add_constraint(y <= x_ + self._clip_M(U - x_.bound().min) * ~d, f"{name}/C2[0]")
         self.add_constraint(y <= -x_ + self._clip_M(U - (-x_).bound().min) * d, f"{name}/C2[1]")
+
+        if self._create_evalf:
+
+            def absf():
+                return abs(x_.get_value())
+
+            y.set_evalf(absf)
+
+            def signf():
+                return int(x_.get_value() >= 0)
+
+            d.set_evalf(signf)
 
         return check_type(y, QuadExpr)
 
@@ -1307,6 +1424,17 @@ class _Model(Model):
         for i, (cond, expr) in enumerate(cond_expr_):
             self.add_constraint(y <= expr + self._clip_M(U_max - expr.bound().min) * (1 - cond), f"{name}/C1[{i}]")
             self.add_constraint(y >= expr - self._clip_M(expr.bound().max - L_min) * (1 - cond), f"{name}/C2[{i}]")
+
+        if self._create_evalf:
+
+            def _muxf() -> float:
+                for cond, expr in cond_expr_:
+                    if round(float(cond)):
+                        return float(expr)
+                raise VariableUnsetException("Mux has undecided output")
+
+            y.set_evalf(_muxf)
+
         return check_type(y, QuadExpr)
 
     @_cache
@@ -1338,6 +1466,16 @@ class _Model(Model):
         for i, (cond, expr) in enumerate(cond_expr_):
             self.add_constraint(y <= expr + (1 - cond), f"{name}/C1[{i}]")
             self.add_constraint(y >= expr - (1 - cond), f"{name}/C2[{i}]")
+
+        if self._create_evalf:
+
+            def _muxf() -> float:
+                for cond, expr in cond_expr_:
+                    if round(float(cond)):
+                        return round(float(expr))
+                assert False, "no cond is set true"
+
+            y.set_evalf(_muxf)
         return y
 
     def muxT_(
@@ -1387,6 +1525,37 @@ class _Model(Model):
             self.add_constraint(d[i] <= en, f"{name}/C3[{i}]")
         self.add_constraint(self.sum(d) == 1, f"{name}/C4")
         self.add_constraint(y == self._M, if_=d[n], name=f"{name}/C5")
+        if self._create_evalf:
+
+            def _minenf() -> float:
+                mn = float("inf")
+                mnid = -1
+                for i, (en, x) in enumerate(en_x_):
+                    if round(float(en)):
+                        xv = float(x)
+                        if xv < mn:
+                            mn = xv
+                            mnid = i
+                if mnid != -1:
+                    return mn
+                return self._M
+
+            y.set_evalf(_minenf)
+            for _i in range(n + 1):
+
+                def _argminenf(__i=_i if i < n else -1) -> float:
+                    mn = float("inf")
+                    mnid = -1
+                    for i, (en, x) in enumerate(en_x_):
+                        if round(float(en)):
+                            xv = float(x)
+                            if xv < mn:
+                                mn = xv
+                                mnid = i
+                    return int(mnid == __i)
+
+                d[_i].set_evalf(_argminenf)
+
         return check_type(_MinMaxResult(y, d), _MinMaxResult[QuadExpr])
 
     def min_enT_(
