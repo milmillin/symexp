@@ -45,12 +45,14 @@ class GurobiSolver(Solver[_ExprT_con]):
         self._var_name_map = {f"V{v.index()}": v.name() for v in model.get_vars()}
         self._var_name_imap = {v.name(): f"V{v.index()}" for v in model.get_vars()}
         self._constr_names = [c.name() for c in model.get_constraints()]
+        self._constr_name_imap: dict[str, str] = {}
         for i, constr in enumerate(model.get_constraints()):
             assert i == constr.index()
             expr = constr.get_expr()
             op = constr.get_op()
             inner_expr = _to_inner_expr(expr, inner_vars)
             constr_name = f"C{i}"
+            self._constr_name_imap[constr_name] = constr._name if constr._name is not None else constr_name
             match op:
                 case RelOp.EQ:
                     self._add_constraint(inner_expr == 0, constr_name)
