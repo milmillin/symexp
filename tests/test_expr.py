@@ -75,7 +75,7 @@ class TestModel:
         a = m.add_var(name="A")
         with pytest.raises(AssertionError):
             b = m.add_var(name="A")
-    
+
     def test_add_constraints(self):
         m = Model.create("test", LinExpr)
         a = m.add_var(name="A")
@@ -87,7 +87,6 @@ class TestModel:
 
         with pytest.raises(AssertionError):
             m.add_constraint(a <= b * b)  # type: ignore
-
 
 
 class TestVar:

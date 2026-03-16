@@ -1688,15 +1688,15 @@ def evaluate(__v1: tuple[SupportsFloat, SupportsFloat]) -> tuple[float, float]: 
 def evaluate(__v1: tuple[SupportsFloat, SupportsFloat, SupportsFloat]) -> tuple[float, float, float]: ...
 @overload
 def evaluate(
-    __v1: tuple[SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat]
+    __v1: tuple[SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat],
 ) -> tuple[float, float, float, float]: ...
 @overload
 def evaluate(
-    __v1: tuple[SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat]
+    __v1: tuple[SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat],
 ) -> tuple[float, float, float, float, float]: ...
 @overload
 def evaluate(
-    __v1: tuple[SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat]
+    __v1: tuple[SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat, SupportsFloat],
 ) -> tuple[float, float, float, float, float, float]: ...
 @overload
 def evaluate(__v1: tuple[SupportsFloat, ...]) -> tuple[float, ...]: ...

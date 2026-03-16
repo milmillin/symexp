@@ -1,3 +1,5 @@
+from importlib.metadata import PackageNotFoundError, version
+
 from .expr import (
     VType,
     Sense,
@@ -19,3 +21,8 @@ from .expr import (
     evaluate,
     evaluate_constr,
 )
+
+try:
+    __version__ = version("symexp")
+except PackageNotFoundError:
+    __version__ = "0.1.0"

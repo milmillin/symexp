@@ -1,5 +1,14 @@
 import pytest
 
+gp = pytest.importorskip("gurobipy")
+
+try:
+    _LICENSE_PROBE = gp.Model()
+except gp.GurobiError as exc:
+    pytest.skip(f"Gurobi unavailable: {exc}", allow_module_level=True)
+else:
+    _LICENSE_PROBE.dispose()
+
 from symexp import Model, VType, Var, BinVar, LinExpr, Constr, Sense
 from symexp.solver import GurobiSolver
 
@@ -78,7 +87,6 @@ class TestMipHelper:
         sol = solver.solve()
         assert sol["y"] == abs(x)
 
-
     @pytest.mark.parametrize("n", range(2, 5))
     def test_mux(self, n: int):
         m = Model.create("test")
@@ -91,7 +99,6 @@ class TestMipHelper:
                 sol = {**x_, "y": j * 10}
                 assert (i == j) == m.check_solution_satisfies_constraints(sol)
 
-
     @pytest.mark.parametrize("n", range(2, 5))
     def test_min_en_(self, n: int):
         m = Model.create("test")
@@ -103,4 +110,3 @@ class TestMipHelper:
             exp = min(j * 10 for j in range(n) if (i >> j) & 1)
             sol = {**x_, "y": float(exp)}
             assert m.check_solution_satisfies_constraints(sol)
-
