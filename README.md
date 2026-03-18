@@ -25,6 +25,11 @@ pip install ".[gurobi]"
 - `scipy` enables `ScipyLpSolver`
 - `gurobi` enables `GurobiSolver` and still requires a valid local Gurobi
   installation and license
+- `cuopt` enables `CuOptSolver` — install separately since it requires
+  NVIDIA's package index:
+  ```bash
+  pip install --extra-index-url=https://pypi.nvidia.com 'cuopt-cu12==26.2.*'
+  ```
 
 If you use the included Conda environment:
 
@@ -246,6 +251,25 @@ solver = GurobiSolver(m, time_limit=60)
 solver.solution_found.register(lambda solver, sol, info: print(info.runtime, info.best_obj))
 solution = solver.solve()
 ```
+
+### `CuOptSolver`
+
+Import with:
+
+```python
+from symexp.solver import CuOptSolver
+```
+
+Use it for LP/MILP models accelerated on NVIDIA GPUs via cuOpt.
+
+- supports continuous, integer, and binary variables
+- accepts `time_limit` and additional `Problem` kwargs
+- does not support warm starts (`set_solutions` raises `NotImplementedError`)
+- emits incumbent solutions through events for MIP solves
+- requires separate installation from NVIDIA's package index:
+  ```bash
+  pip install --extra-index-url=https://pypi.nvidia.com 'cuopt-cu12==26.2.*'
+  ```
 
 ### Solver errors
 
