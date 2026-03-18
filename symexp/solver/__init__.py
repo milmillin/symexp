@@ -11,11 +11,13 @@ __all__ = [
     "SolverInfo",
     "GurobiSolver",
     "ScipyLpSolver",
+    "CuOptSolver",
 ]
 
 _OPTIONAL_SOLVERS = {
     "GurobiSolver": (".gurobi", {"gurobipy"}, "gurobi"),
     "ScipyLpSolver": (".scipy_lp", {"numpy", "scipy"}, "scipy"),
+    "CuOptSolver": (".cuopt", {"cuopt"}, "cuopt"),
 }
 
 

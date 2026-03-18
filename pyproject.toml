@@ -38,6 +38,9 @@ gurobi = [
 scipy = [
     "scipy",
 ]
+cuopt = [
+    "cuopt-cu12",
+]
 
 [project.urls]
 Homepage = "https://github.com/milmillin/symexp"
