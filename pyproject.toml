@@ -38,6 +38,9 @@ gurobi = [
 scipy = [
     "scipy",
 ]
+highs = [
+    "highspy",
+]
 
 [project.urls]
 Homepage = "https://github.com/milmillin/symexp"

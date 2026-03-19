@@ -20,7 +20,7 @@ def _block_imports(monkeypatch: pytest.MonkeyPatch, *prefixes: str) -> None:
 
 
 def _reload_solver_module():
-    for name in ("symexp.solver", "symexp.solver.gurobi", "symexp.solver.scipy_lp", "symexp.solver.cuopt"):
+    for name in ("symexp.solver", "symexp.solver.gurobi", "symexp.solver.highs", "symexp.solver.scipy_lp", "symexp.solver.cuopt"):
         sys.modules.pop(name, None)
     return importlib.import_module("symexp.solver")
 
@@ -33,17 +33,19 @@ def _make_model():
 
 
 def test_solver_package_exports_all_solver_classes_without_optional_backends(monkeypatch: pytest.MonkeyPatch):
-    _block_imports(monkeypatch, "gurobipy", "numpy", "scipy", "cuopt")
+    _block_imports(monkeypatch, "gurobipy", "highspy", "numpy", "scipy", "cuopt")
 
     solver_module = _reload_solver_module()
 
     assert solver_module.GurobiSolver.__name__ == "GurobiSolver"
+    assert solver_module.HighsSolver.__name__ == "HighsSolver"
     assert solver_module.ScipyLpSolver.__name__ == "ScipyLpSolver"
     assert solver_module.CuOptSolver.__name__ == "CuOptSolver"
 
     namespace = {}
     exec("from symexp.solver import *", {}, namespace)
     assert namespace["GurobiSolver"] is solver_module.GurobiSolver
+    assert namespace["HighsSolver"] is solver_module.HighsSolver
     assert namespace["ScipyLpSolver"] is solver_module.ScipyLpSolver
     assert namespace["CuOptSolver"] is solver_module.CuOptSolver
 
@@ -52,6 +54,7 @@ def test_solver_package_exports_all_solver_classes_without_optional_backends(mon
     ("solver_name", "blocked_imports", "install_hint"),
     [
         ("GurobiSolver", ("gurobipy",), 'symexp[gurobi]'),
+        ("HighsSolver", ("highspy",), 'symexp[highs]'),
         ("ScipyLpSolver", ("numpy",), 'symexp[scipy]'),
         ("CuOptSolver", ("cuopt",), "cuopt-cu12==26.2.*"),
     ],

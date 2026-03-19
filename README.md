@@ -3,7 +3,7 @@
 `symexp` is a typed symbolic modeling library for optimization problems. It
 lets you build linear or quadratic expressions with normal Python operators,
 attach them to a model, validate candidate assignments, and solve supported
-models with SciPy or Gurobi.
+models with SciPy, HiGHS, or Gurobi.
 
 ## Installation
 
@@ -18,11 +18,13 @@ Optional extras:
 ```bash
 pip install ".[dev]"
 pip install ".[scipy]"
+pip install ".[highs]"
 pip install ".[gurobi]"
 ```
 
 - `dev` installs `black`, `pre-commit`, `pytest`, and `build`
 - `scipy` enables `ScipyLpSolver`
+- `highs` enables `HighsSolver`
 - `gurobi` enables `GurobiSolver` and still requires a valid local Gurobi
   installation and license
 - `cuopt` enables `CuOptSolver` and must be installed separately from
@@ -228,6 +230,25 @@ Use it for linear programs with continuous variables only.
 - rejects integer or binary variables
 - does not implement warm starts
 - raises solver errors for infeasible, unbounded, timeout, or numerical issues
+
+### `HighsSolver`
+
+Import with:
+
+```python
+from symexp.solver import HighsSolver
+```
+
+Use it for linear programs and mixed-integer linear programs when HiGHS is
+available.
+
+- accepts `Model[LinExpr]`
+- supports continuous, integer, and binary variables
+- accepts `time_limit` and additional HiGHS solver options via `**options`
+- supports a single warm start through `set_solutions(solution)`
+- does not support quadratic models
+- does not emit callback events
+- raises solver errors for infeasible, unbounded, timeout, or ambiguous solver outcomes
 
 ### `GurobiSolver`
 
