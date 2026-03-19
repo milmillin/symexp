@@ -5,6 +5,18 @@ from symexp import Model, VType, Var, BinVar, LinExpr, Constr
 from symexp.expr import QuadExpr
 
 
+def test_top_level_exports_include_model_constructs():
+    namespace = {}
+    exec("from symexp import *", {}, namespace)
+
+    assert namespace["Model"] is Model
+    assert namespace["VType"] is VType
+    assert namespace["Var"] is Var
+    assert namespace["BinVar"] is BinVar
+    assert namespace["LinExpr"] is LinExpr
+    assert namespace["Constr"] is Constr
+
+
 class TestModel:
     def test_init(self):
         m = Model.create("test")

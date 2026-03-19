@@ -25,7 +25,7 @@ pip install ".[gurobi]"
 - `scipy` enables `ScipyLpSolver`
 - `gurobi` enables `GurobiSolver` and still requires a valid local Gurobi
   installation and license
-- `cuopt` enables `CuOptSolver` — install separately since it requires
+- `cuopt` enables `CuOptSolver` and must be installed separately from
   NVIDIA's package index:
   ```bash
   pip install --extra-index-url=https://pypi.nvidia.com 'cuopt-cu12==26.2.*'
@@ -202,6 +202,9 @@ print(evaluate(best.index[1]))   # 1
 ```
 
 ## Solvers
+
+All solver classes are exported from `symexp.solver`. Optional backend
+libraries are imported when you construct the corresponding solver.
 
 All solvers expose:
 

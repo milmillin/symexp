@@ -1,9 +1,23 @@
-from scipy.optimize import linprog
-from scipy.sparse import lil_array
-import numpy as np
+from typing import Any
 
 from ..expr import Model, RelOp, Sense, Solution, VType, QuadExpr, LinExpr
 from ._base import Solver, _ExprT_con, SolverError, SolverTimeoutError, ModelInfeasibleError, ModelUnboundedError
+
+
+def _load_scipy():
+    try:
+        import numpy as np
+        from scipy.optimize import linprog
+        from scipy.sparse import lil_array
+    except ModuleNotFoundError as exc:
+        if exc.name == "numpy" or exc.name == "scipy" or (exc.name is not None and exc.name.startswith("scipy.")):
+            raise ModuleNotFoundError(
+                'ScipyLpSolver requires the optional \'scipy\' extra. '
+                'Install it with `pip install "symexp[scipy]"`.'
+            ) from exc
+        raise
+
+    return np, linprog, lil_array
 
 
 class ScipyLpSolver(Solver[LinExpr]):
@@ -11,7 +25,9 @@ class ScipyLpSolver(Solver[LinExpr]):
         self,
         model: Model[LinExpr],
     ):
+        np, linprog, lil_array = _load_scipy()
         super().__init__(model)
+        self._linprog = linprog
         vars = model.get_vars()
         n_vars = len(vars)
         self._var_names = [v.name() for v in vars]
@@ -50,14 +66,14 @@ class ScipyLpSolver(Solver[LinExpr]):
         else:
             raise ValueError(f"invalid sense: {sense}")
 
-        self.c = _create_vector(n_vars, c_)
-        self.A_ub = _create_matrix(n_vars, A_ub_)
+        self.c = _create_vector(np, n_vars, c_)
+        self.A_ub = _create_matrix(lil_array, n_vars, A_ub_)
         self.B_ub = np.array(B_ub_)
-        self.A_eq = _create_matrix(n_vars, A_eq_)
+        self.A_eq = _create_matrix(lil_array, n_vars, A_eq_)
         self.B_eq = np.array(B_eq_)
 
     def _solve(self):
-        res = linprog(self.c, self.A_ub, self.B_ub, self.A_eq, self.B_eq, self.bounds)
+        res = self._linprog(self.c, self.A_ub, self.B_ub, self.A_eq, self.B_eq, self.bounds)
         status = res["status"]
         if status == 1:
             raise SolverTimeoutError(self, "Iteration limit reached")
@@ -79,14 +95,14 @@ class ScipyLpSolver(Solver[LinExpr]):
 # Utils
 
 
-def _create_vector(size: int, data: list[tuple[int, float]]) -> np.ndarray:
+def _create_vector(np: Any, size: int, data: list[tuple[int, float]]) -> Any:
     res = np.zeros((size,))
     for var, coeff in data:
         res[var] = coeff
     return res
 
 
-def _create_matrix(m: int, data: list[list[tuple[int, float]]]) -> lil_array:
+def _create_matrix(lil_array: Any, m: int, data: list[list[tuple[int, float]]]) -> Any:
     res = lil_array((len(data), m))
     for i, terms in enumerate(data):
         for var, coeff in terms:

@@ -1,9 +1,6 @@
 from typing import Any, cast, Sequence
 import multiprocessing
 
-import gurobipy as gp
-from gurobipy import GRB  # type: ignore
-
 from ..expr import Model, RelOp, Sense, Solution, VType, QuadExpr, LinExpr
 from ._base import (
     Solver,
@@ -15,13 +12,25 @@ from ._base import (
     SolverInfo,
 )
 
-_VTYPE = {VType.BINARY: GRB.BINARY, VType.INTEGER: GRB.INTEGER, VType.CONTINUOUS: GRB.CONTINUOUS}
-_SENSE = {Sense.MAXIMIZE: GRB.MAXIMIZE, Sense.MINIMIZE: GRB.MINIMIZE}
-
 _Var = Any
 _Expr = Any
 
 _INF = float("inf")
+
+
+def _load_gurobi():
+    try:
+        import gurobipy as gp
+        from gurobipy import GRB  # type: ignore
+    except ModuleNotFoundError as exc:
+        if exc.name == "gurobipy":
+            raise ModuleNotFoundError(
+                'GurobiSolver requires the optional \'gurobi\' extra. '
+                'Install it with `pip install "symexp[gurobi]"`.'
+            ) from exc
+        raise
+
+    return gp, GRB
 
 
 class GurobiSolver(Solver[_ExprT_con]):
@@ -33,7 +42,11 @@ class GurobiSolver(Solver[_ExprT_con]):
         time_limit: float = _INF,
         **kwargs,
     ):
+        gp, grb = _load_gurobi()
         super().__init__(model)
+        self._grb = grb
+        self._vtype = {VType.BINARY: grb.BINARY, VType.INTEGER: grb.INTEGER, VType.CONTINUOUS: grb.CONTINUOUS}
+        self._sense = {Sense.MAXIMIZE: grb.MAXIMIZE, Sense.MINIMIZE: grb.MINIMIZE}
         self.model = gp.Model(model.name(), **kwargs)  # type: ignore
         self.model.Params.Threads = num_threads
         self.model.Params.TimeLimit = time_limit
@@ -67,29 +80,30 @@ class GurobiSolver(Solver[_ExprT_con]):
         self._vars = self.model.getVars()
 
     def _add_var(self, name: str, vtype: VType, lb: float, ub: float) -> _Var:
-        return self.model.addVar(vtype=_VTYPE[vtype], name=name, lb=lb, ub=ub)
+        return self.model.addVar(vtype=self._vtype[vtype], name=name, lb=lb, ub=ub)
 
     def _add_constraint(self, constraint: Any, name: str) -> None:
         return self.model.addConstr(constraint, name)
 
     def _set_objective(self, objective: _Expr, sense: Sense) -> None:
-        return self.model.setObjective(objective, _SENSE[sense])
+        return self.model.setObjective(objective, self._sense[sense])
 
     def _solve(self):
+        grb = self._grb
         self.model._self = self
         self.model._objbnd = float("-inf")
         self.model._sense = self._og_model.get_objective()[1].value
         self.model.optimize(_callback)
-        status = self.model.getAttr(GRB.Attr.Status)
-        sol_count = self.model.getAttr(GRB.Attr.SolCount)
-        if status == GRB.INF_OR_UNBD:
+        status = self.model.getAttr(grb.Attr.Status)
+        sol_count = self.model.getAttr(grb.Attr.SolCount)
+        if status == grb.INF_OR_UNBD:
             self.model.Params.DualReductions = 0
             self._solve()
-        if status == GRB.INFEASIBLE:
+        if status == grb.INFEASIBLE:
             raise ModelInfeasibleError(self)
-        elif status == GRB.UNBOUNDED:
+        elif status == grb.UNBOUNDED:
             raise ModelUnboundedError(self)
-        elif status == GRB.TIME_LIMIT and sol_count == 0:
+        elif status == grb.TIME_LIMIT and sol_count == 0:
             raise SolverTimeoutError(self, "No solution found within the time limit")
         elif sol_count == 0:
             raise SolverError(self, "No solution found")
@@ -111,27 +125,26 @@ class GurobiSolver(Solver[_ExprT_con]):
 
 
 def _callback(model, where):
-    if where == GRB.Callback.MIPSOL:
-        self = cast(GurobiSolver, model._self)
+    self = cast(GurobiSolver, model._self)
+    grb = self._grb
+    if where == grb.Callback.MIPSOL:
         xs = model.cbGetSolution(self._vars)
-        runtime = model.cbGet(GRB.Callback.RUNTIME)
+        runtime = model.cbGet(grb.Callback.RUNTIME)
         sol = {self._var_names[int(var.VarName[1:])]: x for var, x in zip(self._vars, xs)}
-        obj = model.cbGet(GRB.Callback.MIPSOL_OBJBST)
-        bnd = model.cbGet(GRB.Callback.MIPSOL_OBJBND)
+        obj = model.cbGet(grb.Callback.MIPSOL_OBJBST)
+        bnd = model.cbGet(grb.Callback.MIPSOL_OBJBND)
         if obj == 1e100:
             obj = _INF
         self.solution_found.invoke(self, sol, SolverInfo(runtime, obj, bnd))
-    elif where == GRB.Callback.MESSAGE:
-        self = cast(GurobiSolver, model._self)
-        runtime = model.cbGet(GRB.Callback.RUNTIME)
+    elif where == grb.Callback.MESSAGE:
+        runtime = model.cbGet(grb.Callback.RUNTIME)
         self.tick.invoke(self, runtime)
-    elif where == GRB.Callback.MIP:
-        self = cast(GurobiSolver, model._self)
-        bnd = model.cbGet(GRB.Callback.MIP_OBJBND) * model._sense
+    elif where == grb.Callback.MIP:
+        bnd = model.cbGet(grb.Callback.MIP_OBJBND) * model._sense
         if bnd > model._objbnd:
             model._objbnd = bnd
-            runtime = model.cbGet(GRB.Callback.RUNTIME)
-            obj = model.cbGet(GRB.Callback.MIP_OBJBST)
+            runtime = model.cbGet(grb.Callback.RUNTIME)
+            obj = model.cbGet(grb.Callback.MIP_OBJBST)
             if obj == 1e100:
                 obj = _INF
             self.bound_found.invoke(self, SolverInfo(runtime, obj, bnd * model._sense))

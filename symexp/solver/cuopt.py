@@ -1,9 +1,5 @@
 from typing import Any, Sequence
 
-from cuopt.linear_programming import Problem, SolverSettings  # type: ignore
-from cuopt.linear_programming.internals import GetSolutionCallback  # type: ignore
-from cuopt.linear_programming.problem import VType as CuVType, sense as CuSense  # type: ignore
-
 from ..expr import Model, RelOp, Sense, Solution, VType, QuadExpr, LinExpr
 from ._base import (
     Solver,
@@ -15,13 +11,27 @@ from ._base import (
     SolverInfo,
 )
 
-_VTYPE = {VType.CONTINUOUS: CuVType.CONTINUOUS, VType.INTEGER: CuVType.INTEGER, VType.BINARY: CuVType.INTEGER}
-_SENSE = {Sense.MAXIMIZE: CuSense.MAXIMIZE, Sense.MINIMIZE: CuSense.MINIMIZE}
-
 _Var = Any
 _Expr = Any
 
 _INF = float("inf")
+
+
+def _load_cuopt():
+    try:
+        from cuopt.linear_programming import Problem, SolverSettings  # type: ignore
+        from cuopt.linear_programming.internals import GetSolutionCallback  # type: ignore
+        from cuopt.linear_programming.problem import VType as CuVType, sense as CuSense  # type: ignore
+    except ModuleNotFoundError as exc:
+        if exc.name == "cuopt" or (exc.name is not None and exc.name.startswith("cuopt.")):
+            raise ModuleNotFoundError(
+                "CuOptSolver requires cuOpt to be installed separately. "
+                "Install it with "
+                "`pip install --extra-index-url=https://pypi.nvidia.com 'cuopt-cu12==26.2.*'`."
+            ) from exc
+        raise
+
+    return Problem, SolverSettings, GetSolutionCallback, CuVType, CuSense
 
 
 class CuOptSolver(Solver[_ExprT_con]):
@@ -31,7 +41,12 @@ class CuOptSolver(Solver[_ExprT_con]):
         time_limit: float = _INF,
         **kwargs,
     ):
+        Problem, SolverSettings, GetSolutionCallback, CuVType, CuSense = _load_cuopt()
         super().__init__(model)
+        self._solver_settings_cls = SolverSettings
+        self._solution_callback_base = GetSolutionCallback
+        self._vtype = {VType.CONTINUOUS: CuVType.CONTINUOUS, VType.INTEGER: CuVType.INTEGER, VType.BINARY: CuVType.INTEGER}
+        self._sense = {Sense.MAXIMIZE: CuSense.MAXIMIZE, Sense.MINIMIZE: CuSense.MINIMIZE}
         self._problem = Problem(**kwargs)
         self._time_limit = time_limit
 
@@ -44,7 +59,7 @@ class CuOptSolver(Solver[_ExprT_con]):
             if vtype == VType.BINARY:
                 lb, ub = 0, 1
             inner_vars.append(
-                self._problem.addVariable(lb=lb, ub=ub, vtype=_VTYPE[vtype], name=f"V{v.index()}")
+                self._problem.addVariable(lb=lb, ub=ub, vtype=self._vtype[vtype], name=f"V{v.index()}")
             )
 
         self._var_names = [v.name() for v in model.get_vars()]
@@ -65,25 +80,26 @@ class CuOptSolver(Solver[_ExprT_con]):
 
         obj, obj_sense = model.get_objective()
         inner_obj = _to_inner_expr(obj, inner_vars)
-        self._problem.setObjective(inner_obj, _SENSE[obj_sense])
+        self._problem.setObjective(inner_obj, self._sense[obj_sense])
 
     def _solve(self):
-        settings = SolverSettings()
+        settings = self._solver_settings_cls()
         if self._time_limit != _INF:
             settings.set_parameter("time_limit", str(self._time_limit))
 
         # Set up MILP callback for solution_found events
         if self._problem.IsMIP:
             solver_self = self
+            solution_callback_base = self._solution_callback_base
 
-            class _SolCallback(GetSolutionCallback):
+            class _SolCallback(solution_callback_base):
                 def get_solution(self, solution, solution_cost, solution_bound, user_data):
                     sol = {
                         solver_self._var_names[i]: float(solution[i])
                         for i in range(len(solver_self._var_names))
                     }
-                    obj = float(solution_cost[0]) if hasattr(solution_cost, '__getitem__') else float(solution_cost)
-                    bnd = float(solution_bound[0]) if hasattr(solution_bound, '__getitem__') else float(solution_bound)
+                    obj = float(solution_cost[0]) if hasattr(solution_cost, "__getitem__") else float(solution_cost)
+                    bnd = float(solution_bound[0]) if hasattr(solution_bound, "__getitem__") else float(solution_bound)
                     info = SolverInfo(0.0, obj, bnd)
                     solver_self.solution_found.invoke(solver_self, sol, info)
 
