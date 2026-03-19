@@ -41,6 +41,9 @@ scipy = [
 highs = [
     "highspy",
 ]
+scip = [
+    "pyscipopt",
+]
 
 [project.urls]
 Homepage = "https://github.com/milmillin/symexp"

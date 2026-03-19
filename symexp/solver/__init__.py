@@ -2,6 +2,7 @@ from ._base import Solver, SolverError, SolverTimeoutError, ModelInfeasibleError
 from .cuopt import CuOptSolver
 from .gurobi import GurobiSolver
 from .highs import HighsSolver
+from .scip import ScipSolver
 from .scipy_lp import ScipyLpSolver
 
 __all__ = [
@@ -13,6 +14,7 @@ __all__ = [
     "SolverInfo",
     "GurobiSolver",
     "HighsSolver",
+    "ScipSolver",
     "ScipyLpSolver",
     "CuOptSolver",
 ]

@@ -3,7 +3,7 @@
 `symexp` is a typed symbolic modeling library for optimization problems. It
 lets you build linear or quadratic expressions with normal Python operators,
 attach them to a model, validate candidate assignments, and solve supported
-models with SciPy, HiGHS, or Gurobi.
+models with SciPy, HiGHS, SCIP, or Gurobi.
 
 ## Installation
 
@@ -19,12 +19,14 @@ Optional extras:
 pip install ".[dev]"
 pip install ".[scipy]"
 pip install ".[highs]"
+pip install ".[scip]"
 pip install ".[gurobi]"
 ```
 
 - `dev` installs `black`, `pre-commit`, `pytest`, and `build`
 - `scipy` enables `ScipyLpSolver`
 - `highs` enables `HighsSolver`
+- `scip` enables `ScipSolver`
 - `gurobi` enables `GurobiSolver` and still requires a valid local Gurobi
   installation and license
 - `cuopt` enables `CuOptSolver` and must be installed separately from
@@ -275,6 +277,23 @@ solver = GurobiSolver(m, time_limit=60)
 solver.solution_found.register(lambda solver, sol, info: print(info.runtime, info.best_obj))
 solution = solver.solve()
 ```
+
+### `ScipSolver`
+
+Import with:
+
+```python
+from symexp.solver import ScipSolver
+```
+
+Use it for linear and quadratic models when SCIP is available.
+
+- accepts `Model[LinExpr]` and `Model[QuadExpr]`
+- supports continuous, integer, and binary variables
+- accepts `time_limit` and additional SCIP parameters via `**params`
+- supports warm starts through `set_solutions(*solutions)`
+- emits incumbent solutions through `solution_found`
+- reformulates quadratic objectives internally so SCIP still sees a linear objective
 
 ### `CuOptSolver`
 
