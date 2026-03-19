@@ -44,8 +44,6 @@ class ScipSolver(Solver[_ExprT_con]):
         self._solver = ScipModel(model.name())
         self._event_type = SCIP_EVENTTYPE
         self._solution_emitted = False
-        if not any(name.startswith("display/") for name in params):
-            self._solver.hideOutput()
         if time_limit != _INF:
             self._solver.setParam("limits/time", time_limit)
         for name, value in params.items():
